@@ -34,15 +34,10 @@ try:
         firmware_path = currentProgram.domainFile.getMetadata()['Executable Location']
         firmware = open(firmware_path, 'rb').read()
         target = VxTarget(firmware_path=firmware_path, firmware=firmware, vx_version=vx_version)
-        # target.logger.setLevel(logging.DEBUG)
-        target.quick_test()
+
         if target.load_address is None:
             logger.debug("Load address is None. Running find_loading_address.")
             target.find_loading_address()
-
-        print(target.get_symbols()[:5])
-        print(target.load_address)
-        exit()
 
         if target.load_address:
             load_address = target.load_address

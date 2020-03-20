@@ -75,6 +75,10 @@ class VxTarget(object):
         self.symbols = ba.get_symbol_table()
         self.load_address = ba.base_addr
 
+        if len(self.symbols) >= 2:
+            self.symbol_table_start = self.symbols[0]['offset']
+            self.symbol_table_end = self.symbols[-1]['offset']
+
 
     def cleanup(self):
         """ Clean up variables.

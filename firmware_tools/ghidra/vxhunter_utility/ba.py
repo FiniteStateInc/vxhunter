@@ -2,6 +2,7 @@ import os
 import struct as st
 import subprocess
 import math
+import sys
 from difflib import SequenceMatcher
 
 # VxWorks 6.8
@@ -46,7 +47,7 @@ def get_pointers(data, endstr, sz):
         is_sym = True
         is_sym &= sym_type in sym_types
         is_sym &= null == 0
-        is_sym &= grp != 0
+        is_sym &= grp == 0
         is_sym &= name_ptr != 0
 
         if not is_sym:
@@ -94,7 +95,7 @@ def get_pointers(data, endstr, sz):
 
         # if we have 100 consecutive symbols, assume that this is indeed the symbol table
         if symtab_count >= 100:
-            print('Symbol table found at 0x%08x' % symtab[i]['offset'])
+            print('Symbol table found at 0x%08x' % symtab[0]['offset'])
             break
 
     
@@ -110,12 +111,13 @@ def get_pointers(data, endstr, sz):
         is_sym = True
         is_sym &= sym_type in sym_types
         is_sym &= null == 0
-        is_sym &= grp != 0
+        is_sym &= grp == 0
         is_sym &= name_ptr != 0
+
+        i += sym_sz
 
         # once we have seen an invalid symbol, break out of the loop
         if not is_sym:
-            i += sym_sz
             break
 
         symtab.append({ 
@@ -125,11 +127,18 @@ def get_pointers(data, endstr, sz):
             'offset': i 
         })
 
+    if symtab_count >= 100:
+        print('Symbol table ends at 0x%08x' % (i - sym_sz))
+
     return ptrtab, symtab
 
 def get_strings(fname, n=8):
     out = subprocess.check_output(['strings', '-n', str(n), '-o', fname])
-    out = str(out)[2:-1].split('\\n')[:-1]
+
+    # python2/3 compat fix
+    if sys.version_info[0] < 3: out = out.split('\n')[:-1]
+    else:                       out = str(out)[2:-1].split('\\n')[:-1]
+
     out = [o.strip().split(' ') for o in out]
     return { int(o[0]): o[1] for o in out if len(o) == 2 }
 
@@ -137,9 +146,11 @@ def get_strings(fname, n=8):
 class BAFinder(object):
     def __init__(self, fname, data):
         self.fname = fname
+        self.data = data
 
         self.strtab = set(get_strings(self.fname).keys())
-        self.ptrtab, self.symtab = get_pointers(data, '<', 4)
+        self.ptrtab, self.symtab = get_pointers(self.data, '<', 4)
+        #self.ptrtab, self.symtab = get_pointers(self.data, '>', 4)
 
         # 1. Sort the pointers and string offsets
         self.strtab = sorted(self.strtab)
@@ -163,10 +174,51 @@ class BAFinder(object):
         strtab_reloc = { o + self.base_addr for o in self.strtab }
         return (len(strtab_reloc.intersection(self.ptrtab)) / float(len(strtab_reloc))) > T
 
+    def get_ref_ratio(self):
+        strtab_reloc = { o + self.base_addr for o in self.strtab }
+        return len(strtab_reloc.intersection(self.ptrtab)) / float(len(strtab_reloc))
+
     def get_symbol_table(self):
         all_strings = get_strings(self.fname, n=3)
 
+        # not needed, just to so that output matches vxhunter exactly
+        self.symtab = sorted(self.symtab, key=lambda x: x['symbol_name_addr'])
+
+        # python2/3 things for getting strings
+        if type(self.data) == str: 
+            convert_fn = str
+            null_terminator = '\x00'
+        else:                      
+            convert_fn = chr
+            null_terminator = 0
+
         for i, sym in enumerate(self.symtab):
-            self.symtab[i]['symbol_name'] = all_strings[sym['symbol_name_addr']]
+            try:
+                self.symtab[i]['symbol_name'] = all_strings[sym['symbol_name_addr'] - self.base_addr]
+            except KeyError:
+                off = self.symtab[i]['symbol_name_addr'] - self.base_addr
+                sym_name = ''
+
+                while self.data[off] != null_terminator:
+                    sym_name += convert_fn(self.data[off])
+                    off += 1
+
+                self.symtab[i]['symbol_name'] = sym_name
 
         return self.symtab
+
+
+if __name__ == '__main__':
+    fname = sys.argv[1]
+    with open(fname, 'rb') as f:
+        data = f.read()
+    baf = BAFinder(fname, data)
+    print(baf.base_addr)
+    print(baf.is_base_addr_good())
+
+    if not baf.is_base_addr_good():
+        print(baf.get_ref_ratio())
+
+    symtab = baf.get_symbol_table()
+    for sym in symtab:
+        print(sym['symbol_name'])
