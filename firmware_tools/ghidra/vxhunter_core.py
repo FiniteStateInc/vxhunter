@@ -34,7 +34,7 @@ need_create_function = [0x04, 0x05]
 
 
 class VxTarget(object):
-    def __init__(self, firmware_path, firmware, vx_version=5, big_endian=False, logger=None):
+    def __init__(self, firmware_path, firmware, vx_version=5, big_endian=False, word_size=4, logger=None):
         """
         :param firmware: data of firmware
         :param vx_version: 5 = VxWorks 5.x; 6= VxWorks 6.x
@@ -66,7 +66,8 @@ class VxTarget(object):
         else:
             self.logger = logger
 
-        ba = BAFinder(firmware_path, firmware)
+        endy_str = ['<', '>'][int(big_endian)]
+        ba = BAFinder(firmware_path, firmware, endy_str=endy_str, wordsize=word_size)
 
         if not ba.is_base_addr_good():
             self.logger.error('Could not find valid base address. Aborting')

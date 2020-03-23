@@ -33,7 +33,15 @@ try:
     if vx_version:
         firmware_path = currentProgram.domainFile.getMetadata()['Executable Location']
         firmware = open(firmware_path, 'rb').read()
-        target = VxTarget(firmware_path=firmware_path, firmware=firmware, vx_version=vx_version)
+
+        word_size = currentProgram.getDefaultPointerSize()
+        big_endian = currentProgram.getLanguage().isBigEndian()
+
+        target = VxTarget(firmware_path=firmware_path, 
+                          firmware=firmware, 
+                          vx_version=vx_version, 
+                          big_endian=big_endian, 
+                          word_size=word_size)
 
         if target.load_address is None:
             logger.debug("Load address is None. Running find_loading_address.")

@@ -144,13 +144,12 @@ def get_strings(fname, n=8):
 
 
 class BAFinder(object):
-    def __init__(self, fname, data):
+    def __init__(self, fname, data, endy_str='<', wordsize=4):
         self.fname = fname
         self.data = data
 
         self.strtab = set(get_strings(self.fname).keys())
-        self.ptrtab, self.symtab = get_pointers(self.data, '<', 4)
-        #self.ptrtab, self.symtab = get_pointers(self.data, '>', 4)
+        self.ptrtab, self.symtab = get_pointers(self.data, endy_str, wordsize)
 
         # 1. Sort the pointers and string offsets
         self.strtab = sorted(self.strtab)
@@ -168,15 +167,23 @@ class BAFinder(object):
         base_addr = abs(self.ptrtab[bidx + 1] - self.strtab[aidx + 1])
 
         self.base_addr = base_addr
-        self.matching_seq_sz = sz
+        self.matching_substr_sz = sz
 
     def is_base_addr_good(self, T=0.5):
+        if hasattr(self, 'ref_ratio'):
+            return self.ref_ratio
+
         strtab_reloc = { o + self.base_addr for o in self.strtab }
-        return (len(strtab_reloc.intersection(self.ptrtab)) / float(len(strtab_reloc))) > T
+        self.ref_ratio = len(strtab_reloc.intersection(self.ptrtab)) / float(len(strtab_reloc))
+        return self.ref_ratio
 
     def get_ref_ratio(self):
+        if hasattr(self, 'ref_ratio'):
+            return self.ref_ratio
+
         strtab_reloc = { o + self.base_addr for o in self.strtab }
-        return len(strtab_reloc.intersection(self.ptrtab)) / float(len(strtab_reloc))
+        self.ref_ratio = len(strtab_reloc.intersection(self.ptrtab)) / float(len(strtab_reloc))
+        return self.ref_ratio
 
     def get_symbol_table(self):
         all_strings = get_strings(self.fname, n=3)
@@ -209,16 +216,29 @@ class BAFinder(object):
 
 
 if __name__ == '__main__':
-    fname = sys.argv[1]
-    with open(fname, 'rb') as f:
+    import argparse
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-e', dest='endy', type=str, default='little', help='endianness of the binary (big or little)')
+    parser.add_argument('-w', dest='wordsize', type=int, default=4, help='word size of the binary (1, 2, 4, or 8)')
+    parser.add_argument('fname', type=str, help='filename of the binary')
+    args = parser.parse_args()
+
+    if args.endy not in ['little', 'big']:
+        print('Endianness must be "big" or "little"')
+
+    if args.wordsize not in [1, 2, 4, 8]:
+        print('Wordsize must be 1, 2, 4, or 8')
+
+    endy_str = ['<', '>'][['little', 'big'].index(args.endy)]
+
+    with open(args.fname, 'rb') as f:
         data = f.read()
-    baf = BAFinder(fname, data)
-    print(baf.base_addr)
-    print(baf.is_base_addr_good())
 
-    if not baf.is_base_addr_good():
-        print(baf.get_ref_ratio())
-
+    baf = BAFinder(args.fname, data, endy_str=endy_str, wordsize=args.wordsize)
     symtab = baf.get_symbol_table()
-    for sym in symtab:
-        print(sym['symbol_name'])
+
+    print('Base Address: 0x%08x' % baf.base_addr)
+    print('\tLongest common substring is %d diffs long' % baf.matching_substr_sz)
+    print('\tRatio of strings referenced: %.4f' % baf.get_ref_ratio())
+    print('\t%d symbols found' % len(symtab))
