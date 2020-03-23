@@ -5,8 +5,28 @@ import math
 import sys
 from difflib import SequenceMatcher
 
-# VxWorks 6.8
-vx_6_sym_types = [
+# VxWorks versions supported
+SUPPORTED_VX_VERSIONS = [5, 6]
+
+# Symbol types for VxWorks 5.5
+VX5_SYM_TYPES = [
+    0x03,  # Global Absolute
+    0x04,  # Local .text
+    0x05,  # Global .text
+    0x06,  # Local Data
+    0x07,  # Global Data
+    0x08,  # Local BSS
+    0x09,  # Global BSS
+    0x12,  # Local Common symbol
+    0x13,  # Global Common symbol
+    0x40,  # Local Symbols related to a PowerPC SDA section
+    0x41,  # Global Symbols related to a PowerPC SDA section
+    0x80,  # Local symbols related to a PowerPC SDA2 section
+    0x81,  # Local symbols related to a PowerPC SDA2 section
+]
+
+# Symbol types for VxWorks 6.8
+VX6_SYM_TYPES = [
     0x03,  # Global Absolute
     0x04,  # Local .text
     0x05,  # Global .text
@@ -20,14 +40,52 @@ vx_6_sym_types = [
     0x41,  # Global Symbols
 ]
 
-sym_types = vx_6_sym_types
+# Some known VxWorks base addresses to check before perform base-address finding algorithm
+KNOWN_BASE_ADDRS = [
+	0x80002000, 
+	0x10000, 
+	0x1000, 
+	0xf2003fe4, 
+	0x100000, 
+	0x107fe0
+]
 
-def get_pointers(data, endstr, sz):
+# The amount of entries in a candidate symbol table needed for it to be chosen as the actual symbol table
+SYMTAB_MIN_COUNT = 100
+
+# Symbol struct size for VxWorks 5/6
+VX5_SYM_SIZE = 16
+VX6_SYM_SIZE = 20
+
+
+def sym_dict(name_ptr, val_ptr, sym_type, offset):
+	return { 
+		'symbol_name_addr': name_ptr, 
+		'symbol_dest_addr': val_ptr, 
+		'symbol_flag': sym_type, 
+		'offset': offset 
+	}
+
+
+def is_sym(name_ptr, grp, null, sym_types):
+	is_sym = True
+	is_sym &= sym_type in sym_types
+	is_sym &= null == 0
+	is_sym &= grp == 0
+	is_sym &= name_ptr != 0
+	return is_sym
+	
+
+def get_pointers(data, endstr, sz, vx_ver, verbose=False):
+	if vx_ver not in SUPPORTED_VX_VERSIONS:
+		print('VxWorks version ', vx_ver, ' is currently not supported')
+		return {}, []
+
     ptrtab = set()
 
-    symtab_low = None
-    symtab_hi = None
-    symtab_count = 0
+    symtab_low = None # the lowest name_ptr address in the current candidate symbol table
+    symtab_hi = None  # the highest name_ptr address in the current candidate symbol table
+
     symtab = []
 
     szstr = ['B', 'H', 'I', 'Q'][int(math.log(sz, 2))]
@@ -39,20 +97,10 @@ def get_pointers(data, endstr, sz):
     while i < len(data) - sym_sz:
         unk1, name_ptr, val_ptr, unk2, grp, sym_type, null = st.unpack(sym_st_fmt, data[i:i+sym_sz])
 
-        ptrtab.add(unk1)
-        ptrtab.add(name_ptr)
-        ptrtab.add(val_ptr)
-        ptrtab.add(unk2)
+		ptrtab.update({unk1, name_ptr, val_ptr, unk2})
 
-        is_sym = True
-        is_sym &= sym_type in sym_types
-        is_sym &= null == 0
-        is_sym &= grp == 0
-        is_sym &= name_ptr != 0
-
-        if not is_sym:
+        if not is_sym(name_ptr, grp, null, sym_types):
             symtab_low, symtab_hi = None, None
-            symtab_count = 0
             symtab = []
             i += 4
             continue
@@ -66,13 +114,7 @@ def get_pointers(data, endstr, sz):
 
         if not sym_in_bounds:
             symtab_low, symtab_hi = name_ptr, name_ptr
-            symtab_count = 1
-            symtab = [{ 
-                'symbol_name_addr': name_ptr, 
-                'symbol_dest_addr': val_ptr, 
-                'symbol_flag': sym_type, 
-                'offset': i 
-            }]
+			symtab = [sym_dict(name_ptr, val_ptr, sym_type, i)]
 
         # here, we have a valid symbol that is within the bounds of the current symbol table
         if symtab_low is not None and symtab_hi is not None:
@@ -81,75 +123,65 @@ def get_pointers(data, endstr, sz):
         else:
             symtab_low, symtab_hi = name_ptr, name_ptr
 
-        symtab_count += 1
-
-        symtab.append({ 
-            'symbol_name_addr': name_ptr, 
-            'symbol_dest_addr': val_ptr, 
-            'symbol_flag': sym_type, 
-            'offset': i 
-        })
+		symtab.append(sym_dict(name_ptr, val_ptr, sym_type, i))
 
         # increase the cursor by the symbol size since we have a valid symbol
         i += sym_sz
 
         # if we have 100 consecutive symbols, assume that this is indeed the symbol table
-        if symtab_count >= 100:
+        if len(symtab) >= SYMTAB_MIN_COUNT:
             print('Symbol table found at 0x%08x' % symtab[0]['offset'])
             break
 
+	
+	# throw out the candidate symbol table and return if it's below the threshold count
+	if len(symtab) < SYMTAB_MIN_COUNT:
+		return ptrtab, []
     
     # if we have a valid symbol table (at least 100 symbols), get the rest of the symbol table
-    while symtab_count >= 100 and i < len(data):
+	for i in range(i, len(data), sym_sz):
         unk1, name_ptr, val_ptr, unk2, grp, sym_type, null = st.unpack(sym_st_fmt, data[i:i+sym_sz])
 
-        ptrtab.add(unk1)
-        ptrtab.add(name_ptr)
-        ptrtab.add(val_ptr)
-        ptrtab.add(unk2)
-
-        is_sym = True
-        is_sym &= sym_type in sym_types
-        is_sym &= null == 0
-        is_sym &= grp == 0
-        is_sym &= name_ptr != 0
-
-        i += sym_sz
+		ptrtab.update({unk1, name_ptr, val_ptr, unk2})
 
         # once we have seen an invalid symbol, break out of the loop
-        if not is_sym:
+        if not is_sym(name_ptr, grp, null, sym_types):
             break
 
-        symtab.append({ 
-            'symbol_name_addr': name_ptr, 
-            'symbol_dest_addr': val_ptr, 
-            'symbol_flag': sym_type, 
-            'offset': i 
-        })
+		symtab.append(sym_dict(name_ptr, val_ptr, sym_type, i))
 
-    if symtab_count >= 100:
+	if verbose:
         print('Symbol table ends at 0x%08x' % (i - sym_sz))
 
     return ptrtab, symtab
 
+
 def get_strings(fname, n=8):
+	'''
+	Use the `strings` utility to return a mapping of string offset -> string for all strings of length >= n
+	'''
     out = subprocess.check_output(['strings', '-n', str(n), '-o', fname])
 
-    # python2/3 compat fix
+    # python2/3 compat fix - python2 `check_output` returns a string while python3 returns bytes
     if sys.version_info[0] < 3: out = out.split('\n')[:-1]
     else:                       out = str(out)[2:-1].split('\\n')[:-1]
 
     out = [o.strip().split(' ') for o in out]
+
     return { int(o[0]): o[1] for o in out if len(o) == 2 }
 
 
 class BAFinder(object):
-    def __init__(self, fname, data, endy_str='<', wordsize=4):
+    def __init__(self, fname, data, endy_str='<', wordsize=4, verbose=False):
         self.fname = fname
         self.data = data
 
-        self.strtab = set(get_strings(self.fname).keys())
-        self.ptrtab, self.symtab = get_pointers(self.data, endy_str, wordsize)
+		# Get a mapping of offset -> string for all strings of at least length 4
+		self.all_strings = get_strings(self.fname, n=4)
+
+		# Get the offsets of every string with at least length 8 (less false positives)
+		self.strtab = { s[0] for s in self.all_strings.items() if len(s[1]) >= 8 }
+        self.ptrtab, self.symtab = get_pointers(self.data, endy_str, wordsize, verbose=verbose)
 
         # 1. Sort the pointers and string offsets
         self.strtab = sorted(self.strtab)
@@ -186,8 +218,6 @@ class BAFinder(object):
         return self.ref_ratio
 
     def get_symbol_table(self):
-        all_strings = get_strings(self.fname, n=3)
-
         # not needed, just to so that output matches vxhunter exactly
         self.symtab = sorted(self.symtab, key=lambda x: x['symbol_name_addr'])
 
