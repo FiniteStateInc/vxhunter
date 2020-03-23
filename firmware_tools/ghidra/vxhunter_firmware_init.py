@@ -37,47 +37,40 @@ try:
         word_size = currentProgram.getDefaultPointerSize()
         big_endian = currentProgram.getLanguage().isBigEndian()
 
+        # VxTarget's init will exit if a valid base address isn't found, therefore we don't have to check after here
         target = VxTarget(firmware_path=firmware_path, 
                           firmware=firmware, 
                           vx_version=vx_version, 
                           big_endian=big_endian, 
                           word_size=word_size)
 
-        if target.load_address is None:
-            logger.debug("Load address is None. Running find_loading_address.")
-            target.find_loading_address()
+        load_address = target.load_address
 
-        if target.load_address:
-            load_address = target.load_address
+        # Rebase_image
+        target_block = currentProgram.memory.blocks[0]
+        address = toAddr(load_address)
+        logger.debug("Rebasing. target_block: {}; load_address: {}".format(target_block, address))
+        currentProgram.memory.moveBlock(target_block, address, TaskMonitor.DUMMY)
 
-            # Rebase_image
-            target_block = currentProgram.memory.blocks[0]
-            address = toAddr(load_address)
-            logger.debug("Rebasing. target_block: {}; load_address: {}".format(target_block, address))
-            currentProgram.memory.moveBlock(target_block, address, TaskMonitor.DUMMY)
+        # Create symbol table structs
+        logger.debug("Creating symbol table.")
+        symbol_table_start = target.symbol_table_start + target.load_address
+        symbol_table_end = target.symbol_table_end + target.load_address
+        fix_symbol_table_structs(symbol_table_start, symbol_table_end, vx_version)
 
-            # Create symbol table structs
-            logger.debug("Creating symbol table.")
-            symbol_table_start = target.symbol_table_start + target.load_address
-            symbol_table_end = target.symbol_table_end + target.load_address
-            fix_symbol_table_structs(symbol_table_start, symbol_table_end, vx_version)
+        # Load symbols
+        symbols = target.get_symbols()
+        for symbol in symbols:
+            try:
+                symbol_name = symbol["name"]
+                symbol_name_addr = symbol["name_addr"]
+                symbol_dest_addr = symbol["dest_addr"]
+                symbol_flag = symbol["flag"]
+                add_symbol(symbol_name, symbol_name_addr, symbol_dest_addr, symbol_flag)
 
-            # Load symbols
-            symbols = target.get_symbols()
-            for symbol in symbols:
-                try:
-                    symbol_name = symbol["name"]
-                    symbol_name_addr = symbol["name_addr"]
-                    symbol_dest_addr = symbol["dest_addr"]
-                    symbol_flag = symbol["flag"]
-                    add_symbol(symbol_name, symbol_name_addr, symbol_dest_addr, symbol_flag)
-
-                except Exception as err:
-                    logger.error("add_symbol failed: {}".format(err))
-                    continue
-
-        else:
-            popup("Can't find symbols in binary")
+            except Exception as err:
+                logger.error("add_symbol failed: {}".format(err))
+                continue
 
 except Exception as err:
     print(err)

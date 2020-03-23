@@ -54,6 +54,16 @@ KNOWN_BASE_ADDRS = [
 SYMTAB_MIN_COUNT = 100
 
 
+def log(s, logger, verbose):
+    if not verbose:
+        return
+
+    # TODO: Figure out how to make this formatting not look weird
+    if logger is None: print(s)
+    else:              logger.info(s)
+
+
+
 def get_symbol_fmt(endy_str, word_size_str, vx_ver):
     '''
     Return the `struct` format for the symbol struct depending on the VxWorks version and the size of said struct.
@@ -63,6 +73,7 @@ def get_symbol_fmt(endy_str, word_size_str, vx_ver):
     else:           fmt = endy_str + (word_size_str * 4) + 'H' + 'BB'
 
     return fmt, st.calcsize(fmt)
+
 
 
 def get_ptr_fmt(endy_str, word_size_str, vx_ver):
@@ -76,6 +87,7 @@ def get_ptr_fmt(endy_str, word_size_str, vx_ver):
     return fmt, st.calcsize(fmt)
 
 
+
 def sym_dict(offset, name_ptr, val_ptr, grp, sym_type, null):
     return { 
         'name_addr': name_ptr, 
@@ -83,6 +95,7 @@ def sym_dict(offset, name_ptr, val_ptr, grp, sym_type, null):
         'flag': sym_type, 
         'offset': offset 
     }
+
 
 
 def is_sym_valid(sym_types, name_ptr, val_ptr, grp, sym_type, null):
@@ -94,7 +107,11 @@ def is_sym_valid(sym_types, name_ptr, val_ptr, grp, sym_type, null):
     return is_sym
 
 
+
 def parse_sym(data, offset, sym_st_fmt, sym_size, sym_types):
+    '''
+    Return a symbol dictionary and whether or not said symbol is valid for the current VxWorks version.
+    '''
     fields = list(st.unpack(sym_st_fmt, data[offset : offset+sym_size]))
 
     # if the symbol is a VxWorks 6 symbol, delete the fourth field since it's not checked anyways
@@ -108,9 +125,16 @@ def parse_sym(data, offset, sym_st_fmt, sym_size, sym_types):
     return sym_dict(offset, *fields), is_sym_valid(sym_types, *fields)
     
 
-def get_pointers(data, endy_str, word_size, vx_ver, verbose=False):
+
+def get_pointers(data, endy_str, word_size, vx_ver, verbose=False, logger=None):
+    '''
+    TODO: Find a better name for this function
+
+    Return the candidate pointers and symbol table (if one is found). Works by scanning the file for valid
+    symbols until 100 consecutive valid symbols are found. Then the rest of the symbol table is parsed.
+    '''
     if vx_ver not in SUPPORTED_VX_VERSIONS:
-        print('VxWorks version ', vx_ver, ' is currently not supported')
+        log('VxWorks version ', vx_ver, ' is currently not supported', logger, True)
         return {}, []
 
     word_size_str = ['B', 'H', 'I', 'Q'][int(math.log(word_size, 2))]
@@ -169,8 +193,7 @@ def get_pointers(data, endy_str, word_size, vx_ver, verbose=False):
 
         # if we have 100 consecutive symbols, assume that this is indeed the symbol table
         if len(symtab) >= SYMTAB_MIN_COUNT:
-            if verbose:
-                print('Symbol table found at 0x%08x' % symtab[0]['offset'])
+            log('Symbol table found at 0x%08x' % symtab[0]['offset'], logger, verbose)
             break
 
     
@@ -191,10 +214,10 @@ def get_pointers(data, endy_str, word_size, vx_ver, verbose=False):
 
         symtab.append(sym)
 
-    if verbose:
-        print('Symbol table ends at 0x%08x' % (i - sym_st_size))
+    log('Symbol table ends at 0x%08x' % (i - sym_st_size), logger, verbose)
 
     return ptrtab, symtab
+
 
 
 def get_strings(fname, n=8):
@@ -213,8 +236,9 @@ def get_strings(fname, n=8):
     return { int(o[0]): ' '.join(o[1:]) for o in out if len(o) >= 2 and o[0].isdigit() } 
 
 
+
 class BAFinder(object):
-    def __init__(self, fname, data, endy_str='<', word_size=4, vx_ver=6, verbose=False):
+    def __init__(self, fname, data, endy_str='<', word_size=4, vx_ver=6, verbose=False, logger=None):
         self.fname = fname
         self.data = data
         self.base_addr = 0
@@ -224,21 +248,22 @@ class BAFinder(object):
 
         # Get the offsets of every string with at least length 8 (less false positives)
         self.strtab = { s[0] for s in self.all_strings.items() if len(s[1]) >= 8 }
-        self.ptrtab, self.symtab = get_pointers(self.data, endy_str, word_size, vx_ver, verbose=verbose)
+        self.ptrtab, self.symtab = get_pointers(self.data, endy_str, word_size, vx_ver, verbose=verbose, logger=logger)
 
         # Check if any of the known base addresses are good matches before doing the base address finding algo
         ba_set = False
 
         for ba_cand in KNOWN_BASE_ADDRS:
-            if verbose:
-                print('Trying base address of %08x' % ba_cand)
+            log('Trying base address of 0x%08x' % ba_cand, logger, verbose) 
 
             if self.is_base_addr_good(ba=ba_cand):
+                log('Base address is 0x%08x' % ba_cand, logger, verbose)
+
                 self.base_addr = ba_cand
                 ba_set = True
                 return
 
-        # reset the reference ratio
+        # reset the reference ratio - this is a little ugly, will want to change later
         if hasattr(self, 'ref_ratio'):
             delattr(self, 'ref_ratio')
 
@@ -259,6 +284,8 @@ class BAFinder(object):
         # 4. Get the base address from the longest common substring
         self.base_addr = abs(self.ptrtab[bidx + 1] - self.strtab[aidx + 1])
         self.matching_substr_size = size
+
+        log('Base address is %08x' % ba_cand, logger, verbose)
 
 
     def is_base_addr_good(self, T=0.5, ba=None):
@@ -282,6 +309,7 @@ class BAFinder(object):
 
         strtab_reloc = { o + self.base_addr for o in self.strtab }
         self.ref_ratio = len(strtab_reloc.intersection(self.ptrtab)) / float(len(strtab_reloc))
+
         return self.ref_ratio
 
 
@@ -300,6 +328,7 @@ class BAFinder(object):
         for i, sym in enumerate(self.symtab):
             try:
                 self.symtab[i]['name'] = self.all_strings[sym['name_addr'] - self.base_addr]
+
             except KeyError:
                 off = self.symtab[i]['name_addr'] - self.base_addr
                 sym_name = ''

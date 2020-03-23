@@ -17,20 +17,8 @@ class VxTarget(object):
         :param big_endian: True = big endian; False = little endian
         :param logger: logger for the target (default: None)
         """
-        self.big_endian = big_endian
-        self._vx_version = vx_version
-        self.symbol_table_start = None
-        self.symbol_table_end = None
-        self._string_table = []
-        self._symbol_table = []
         self.symbols = []
         self.load_address = None
-        self._firmware = firmware
-        self._has_symbol = None
-        if self._vx_version == 5:
-            self._symbol_interval = 16
-        elif self._vx_version == 6:
-            self._symbol_interval = 20
 
         if logger is None:
             self.logger = logging.getLogger(__name__)
@@ -43,7 +31,14 @@ class VxTarget(object):
             self.logger = logger
 
         endy_str = ['<', '>'][int(big_endian)]
-        ba = BAFinder(firmware_path, firmware, endy_str=endy_str, wordsize=word_size)
+
+        ba = BAFinder(firmware_path, 
+                      firmware, 
+                      endy_str=endy_str, 
+                      word_size=word_size, 
+                      vx_ver=vx_version,
+                      logger=logger,
+                      verbose=True)
 
         if not ba.is_base_addr_good():
             self.logger.error('Could not find valid base address. Aborting')
@@ -55,20 +50,6 @@ class VxTarget(object):
         if len(self.symbols) >= 2:
             self.symbol_table_start = self.symbols[0]['offset']
             self.symbol_table_end = self.symbols[-1]['offset']
-
-
-    def cleanup(self):
-        """ Clean up variables.
-
-        :return:
-        """
-        self.big_endian = False
-        self.symbol_table_start = None
-        self.symbol_table_end = None
-        self._string_table = []
-        self._symbol_table = []
-        self.load_address = None
-        self._has_symbol = None
 
 
     def get_symbols(self):
