@@ -4,31 +4,7 @@ import re
 import struct
 from vxhunter_utility.ba import BAFinder
 
-default_check_count = 100
-
-known_address = [0x80002000, 0x10000, 0x1000, 0xf2003fe4, 0x100000, 0x107fe0]
-
 function_name_key_words = ['bzero', 'usrInit', 'bfill']
-
-# VxWorks 5.5
-vx_5_sym_types = [
-    # 0x00,      # Undefined Symbol
-    # 0x01,      # Global (external)
-    # 0x02,      # Local Absolute
-    0x03,  # Global Absolute
-    0x04,  # Local .text
-    0x05,  # Global .text
-    0x06,  # Local Data
-    0x07,  # Global Data
-    0x08,  # Local BSS
-    0x09,  # Global BSS
-    0x12,  # Local Common symbol
-    0x13,  # Global Common symbol
-    0x40,  # Local Symbols related to a PowerPC SDA section
-    0x41,  # Global Symbols related to a PowerPC SDA section
-    0x80,  # Local symbols related to a PowerPC SDA2 section
-    0x81,  # Local symbols related to a PowerPC SDA2 section
-]
 
 need_create_function = [0x04, 0x05]
 

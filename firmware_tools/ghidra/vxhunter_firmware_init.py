@@ -66,10 +66,10 @@ try:
             symbols = target.get_symbols()
             for symbol in symbols:
                 try:
-                    symbol_name = symbol["symbol_name"]
-                    symbol_name_addr = symbol["symbol_name_addr"]
-                    symbol_dest_addr = symbol["symbol_dest_addr"]
-                    symbol_flag = symbol["symbol_flag"]
+                    symbol_name = symbol["name"]
+                    symbol_name_addr = symbol["name_addr"]
+                    symbol_dest_addr = symbol["dest_addr"]
+                    symbol_flag = symbol["flag"]
                     add_symbol(symbol_name, symbol_name_addr, symbol_dest_addr, symbol_flag)
 
                 except Exception as err:

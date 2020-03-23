@@ -216,7 +216,6 @@ class BAFinder(object):
     def __init__(self, fname, data, endy_str='<', word_size=4, vx_ver=6, verbose=False):
         self.fname = fname
         self.data = data
-		self.base_addr = 0
 
 		# Get a mapping of offset -> string for all strings of at least length 4
 		self.all_strings = get_strings(self.fname, n=4)
@@ -224,17 +223,6 @@ class BAFinder(object):
 		# Get the offsets of every string with at least length 8 (less false positives)
 		self.strtab = { s[0] for s in self.all_strings.items() if len(s[1]) >= 8 }
         self.ptrtab, self.symtab = get_pointers(self.data, endy_str, word_size, vx_ver, verbose=verbose)
-
-		# Check if any of the known base addresses are good matches before doing the base address finding algo
-		ba_set = False
-
-		for ba_cand in KNOWN_BASE_ADDRS:
-			if self.is_base_addr_good(ba=ba_cand):
-				self.base_addr = ba_cand
-				ba_set = True
-				return
-
-		# If we reached here, none of the known base addresses were a good match so we do the base finding algo
 
         # 1. Sort the pointers and string offsets
         self.strtab = sorted(self.strtab)
@@ -246,26 +234,22 @@ class BAFinder(object):
 
         # 3. Find the longest common substring between the diffs
         sm = SequenceMatcher(None, strdiffs, ptrdiffs)
-        aidx, bidx, size = sm.find_longest_match(0, len(strdiffs), 0, len(ptrdiffs))
+        aidx, bidx, sz = sm.find_longest_match(0, len(strdiffs), 0, len(ptrdiffs))
 
         # 4. Get the base address from the longest common substring
-        self.base_addr = abs(self.ptrtab[bidx + 1] - self.strtab[aidx + 1])
-        self.matching_substr_size = size
+        base_addr = abs(self.ptrtab[bidx + 1] - self.strtab[aidx + 1])
+
+        self.base_addr = base_addr
+        self.matching_substr_sz = sz
 
 
-    def is_base_addr_good(self, T=0.75, ba=None):
-		if ba is not None:
-			delattr(self, 'ref_ratio')
-		else:
-			ba = self.base_addr
-
+    def is_base_addr_good(self, T=0.5):
         if hasattr(self, 'ref_ratio'):
             return self.ref_ratio
 
-        strtab_reloc = { o + bafor o in self.strtab }
+        strtab_reloc = { o + self.base_addr for o in self.strtab }
         self.ref_ratio = len(strtab_reloc.intersection(self.ptrtab)) / float(len(strtab_reloc))
-
-        return self.ref_ratio > T
+        return self.ref_ratio
 
 
     def get_ref_ratio(self):
@@ -333,19 +317,10 @@ if __name__ == '__main__':
     with open(args.fname, 'rb') as f:
         data = f.read()
 
-    baf = BAFinder(args.fname, 
-				   data, 
-				   endy_str=endy_str, 
-				   word_size=args.word_size, 
-				   vx_ver=args.vx_ver, 
-				   verbose=args.verbose)
-
+    baf = BAFinder(args.fname, data, endy_str=endy_str, wordsize=args.wordsize)
     symtab = baf.get_symbol_table()
 
     print('Base Address: 0x%08x' % baf.base_addr)
-
-	if hasattr(baf, 'matching_substr_size'):
-    	print('\tLongest common substring is %d diffs long' % baf.matching_substr_size)
-
+    print('\tLongest common substring is %d diffs long' % baf.matching_substr_sz)
     print('\tRatio of strings referenced: %.4f' % baf.get_ref_ratio())
     print('\t%d symbols found' % len(symtab))
