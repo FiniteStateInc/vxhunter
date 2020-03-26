@@ -48,8 +48,9 @@ class VxTarget(object):
         self.load_address = ba.base_addr
 
         if len(self.symbols) >= 2:
-            self.symbol_table_start = self.symbols[0]['offset']
-            self.symbol_table_end = self.symbols[-1]['offset']
+            symbol_offsets = [sym['offset'] for sym in self.symbols]
+            self.symbol_table_start = min(symbol_offsets)
+            self.symbol_table_end = max(symbol_offsets)
 
 
     def get_symbols(self):

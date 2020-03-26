@@ -309,6 +309,7 @@ def fix_symbol_table_structs(symbol_table_start, symbol_table_end, vx_version):
 
     sym_length = (symbol_table_end - symbol_table_start) // symbol_interval
     logger.debug("Fixing symbol table with start at {} and end at {} with length {}.".format(symbol_table_start_addr, symbol_table_end_addr, sym_length))
+    print("Fixing symbol table with start at {} and end at {} with length {}.".format(symbol_table_start_addr, symbol_table_end_addr, sym_length))
     createLabel(symbol_table_start_addr, "vxSymTbl", True)
     clearListing(symbol_table_start_addr, symbol_table_end_addr)
     vx_symbol_array_data_type = ArrayDataType(dt, sym_length, dt.getLength())
