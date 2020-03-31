@@ -3,74 +3,81 @@ import logging
 
 from vxhunter_core import VxTarget
 from vxhunter_utility.common import *
-from vxhunter_utility.symbol import add_symbol, fix_symbol_table_structs
+from vxhunter_utility.symbol import add_symbol, create_symbol_table
 
 from ghidra.util.task import TaskMonitor
 
-# Logger setup
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)
-consolehandler = logging.StreamHandler()
-console_format = logging.Formatter('[%(levelname)-8s][%(module)s] %(message)s')
-consolehandler.setFormatter(console_format)
-logger.addHandler(consolehandler)
 
-# For https://github.com/VDOO-Connected-Trust/ghidra-pyi-generator
-try:
-    from ghidra_builtins import *
+def rebase_image(target):
+    '''
+    Rebase the firmware to the load address found the base finder
+    '''
+    load_address = target.load_address
 
-except Exception as err:
-    pass
+    # Rebase the image.
+    blocks = cp.memory.blocks
 
-try:
-    vx_version = askChoice("Choice", "Please choose VxWorks main Version ", ["5.x", "6.x"], "5.x")
-    if vx_version == u"5.x":
-        vx_version = 5
+    if len(blocks) == 0:
+        logging.error('No valid memory blocks on the program')
+        return False
 
-    elif vx_version == u"6.x":
-        vx_version = 6
+    target_block = cp.memory.blocks[0]
+    address = toAddr(load_address)
 
-    if vx_version:
-        firmware_path = currentProgram.domainFile.getMetadata()['Executable Location']
-        firmware = open(firmware_path, 'rb').read()
+    logging.info("Rebasing to 0x%08x" % address.offset)
 
-        word_size = currentProgram.getDefaultPointerSize()
-        big_endian = currentProgram.getLanguage().isBigEndian()
+    return move_block(target_block, address)
 
-        # VxTarget's init will exit if a valid base address isn't found, therefore we don't have to check after here
-        target = VxTarget(firmware_path=firmware_path, 
-                          firmware=firmware, 
-                          vx_version=vx_version, 
-                          big_endian=big_endian, 
-                          word_size=word_size)
 
-        load_address = target.load_address
+def process_symbol_table(target):
+    '''
+    Create the symbol table and add all of the symbols.
+    '''
+    if not target.has_symbol_table():
+        logging.error('No symbol table found in binary. Aborting.')
+        return
 
-        # Rebase_image
-        target_block = currentProgram.memory.blocks[0]
-        address = toAddr(load_address)
-        logger.debug("Rebasing. target_block: {}; load_address: {}".format(target_block, address))
-        currentProgram.memory.moveBlock(target_block, address, TaskMonitor.DUMMY)
+    logging.info("Creating symbol table")
 
-        # Create symbol table structs
-        logger.debug("Creating symbol table.")
-        symbol_table_start = target.symbol_table_start + target.load_address
-        symbol_table_end = target.symbol_table_end + target.load_address
-        fix_symbol_table_structs(symbol_table_start, symbol_table_end, vx_version)
+    symtab_start = target.symtab_start + target.load_address
+    symtab_end = target.symtab_end + target.load_address
 
-        # Load symbols
-        symbols = target.get_symbols()
-        for symbol in symbols:
-            try:
-                symbol_name = symbol["name"]
-                symbol_name_addr = symbol["name_addr"]
-                symbol_dest_addr = symbol["dest_addr"]
-                symbol_flag = symbol["flag"]
-                add_symbol(symbol_name, symbol_name_addr, symbol_dest_addr, symbol_flag)
+    # Create the symbol table struct.
+    create_symbol_table(symtab_start, symtab_end, vx_version)
 
-            except Exception as err:
-                logger.error("add_symbol failed: {}".format(err))
-                continue
+    # Define each symbol individually.
+    for symbol in target.symbols:
+        add_symbol(symbol['name'], 
+                   symbol['name_addr'], 
+                   symbol['dest_addr'], 
+                   symbol['flag'])
 
-except Exception as err:
-    print(err)
+
+if __name__ == '__main__':
+    # Start by getting the VxWorks version (currently only 5 and 6 are supported)
+    vx_version = get_vxworks_version()
+
+    if vx_version is None:
+        exit()
+
+    # Get some metadata about the program needed to find the base address
+    firmware_path = cp.domainFile.getMetadata()['Executable Location']
+    firmware = open(firmware_path, 'rb').read()
+
+    # VxTarget's init will exit if a valid base address isn't found, therefore we don't have to check after here
+    target = VxTarget(firmware_path=firmware_path, 
+                      firmware=firmware, 
+                      vx_version=vx_version, 
+                      big_endian=is_big_endian, 
+                      word_size=word_size)
+
+    # If we can't rebase the image, it's not even worth going on.
+    if not rebase_image(target):
+        exit()
+
+    process_symbol_table(target)
+
+    # Ghidra probably has something to say after all the changes we've made.
+    logging.info('Re-analyzing')
+    analyze(cp)
+

@@ -238,21 +238,27 @@ def get_strings(fname, n=8):
 
 
 class BAFinder(object):
-    def __init__(self, fname, data, endy_str='<', word_size=4, vx_ver=6, verbose=False, logger=None):
+    def __init__(self, fname, data, endy_str='<', word_size=4, vx_ver=6, verbose=False, logger=None, strlen=8, test_addr=None):
         self.fname = fname
         self.data = data
         self.base_addr = 0
+        self.symtab = []
 
         # Get a mapping of offset -> string for all strings of at least length 4
         self.all_strings = get_strings(self.fname, n=4)
 
         # Get the offsets of every string with at least length 8 (less false positives)
-        self.strtab = { s[0] for s in self.all_strings.items() if len(s[1]) >= 8 }
+        self.strtab = { s[0] for s in self.all_strings.items() if len(s[1]) >= strlen }
         self.ptrtab, self.symtab = get_pointers(self.data, endy_str, word_size, vx_ver, verbose=verbose, logger=logger)
 
-        # Check if any of the known base addresses are good matches before doing the base address finding algo
-        ba_set = False
+        # Don't go any farther if we're just testing a base address
+        if test_addr is not None:
+            self.base_addr = test_addr
+            ref_ratio = self.get_ref_ratio()
+            log('Base address of 0x%08x has a ref ratio of %.4f' % (test_addr, ref_ratio), logger, True)
+            exit()
 
+        # Check if any of the known base addresses are good matches before doing the base address finding algo
         for ba_cand in KNOWN_BASE_ADDRS:
             log('Trying base address of 0x%08x' % ba_cand, logger, verbose) 
 
@@ -260,7 +266,6 @@ class BAFinder(object):
                 log('Base address is 0x%08x' % ba_cand, logger, verbose)
 
                 self.base_addr = ba_cand
-                ba_set = True
                 return
 
         # reset the reference ratio - this is a little ugly, will want to change later
@@ -285,7 +290,7 @@ class BAFinder(object):
         self.base_addr = abs(self.ptrtab[bidx + 1] - self.strtab[aidx + 1])
         self.matching_substr_size = size
 
-        log('Base address is %08x' % ba_cand, logger, verbose)
+        log('Base address is 0x%08x' % ba_cand, logger, verbose)
 
 
     def is_base_addr_good(self, T=0.5, ba=None):
@@ -314,9 +319,6 @@ class BAFinder(object):
 
 
     def get_symbol_table(self):
-        # not needed, just to so that output matches vxhunter exactly
-        self.symtab = sorted(self.symtab, key=lambda x: x['name_addr'])
-
         # python2/3 things for getting strings
         if type(self.data) == str: 
             convert_fn = str
@@ -342,13 +344,61 @@ class BAFinder(object):
         return self.symtab
 
 
+    def get_symbol_addr_clusters(self):
+        # sort the symbol table by destination address
+        self.symtab = sorted(self.symtab, key=lambda x: x['dest_addr'])
+
+        regions = []
+
+        for sym in self.symtab:
+            a = sym['dest_addr']
+            reg_idx = None
+
+            for i, (lo, hi) in enumerate(regions):
+                if a >= lo - 0x1000 and a <= hi + 0x1000:
+                    reg_idx = i
+                    break
+            
+            if reg_idx is None:
+                print('Creating a new region for %s at 0x%08x' % (sym['name'], a))
+                regions.append((a, a))
+
+                # Keep the regions sorted by the lower bound.
+                regions = sorted(regions, key=lambda r: r[0])
+            else:
+                lo, hi = regions[reg_idx]
+                lo, hi = min(lo, a), max(lo, a)
+                regions[reg_idx] = (lo, hi)
+
+            # Coalesce the regions.
+            reg_idx = 0
+    
+            while reg_idx < len(regions)-1:
+                lo1, hi1 = regions[reg_idx]
+                lo2, hi2 = regions[reg_idx+1]
+
+                # If the consecutive regions are overlapping, create a unified region,
+                # deleting the second region.
+                if hi1 >= lo2:
+                    regions[reg_idx] = (lo1, hi2)
+                    del regions[reg_idx+1]
+                    continue
+
+                reg_idx += 1
+
+        for lo, hi in regions:
+            print('0x%08x - 0x%08x' % (lo, hi))
+
+
 if __name__ == '__main__':
     import argparse
 
     parser = argparse.ArgumentParser()
     parser.add_argument('-e', dest='endy', type=str, default='little', help='Endianness of the binary (big or little)')
     parser.add_argument('-w', dest='word_size', type=int, default=4, help='Word size of the binary (1, 2, 4, or 8)')
+    parser.add_argument('-t', dest='test_addr', type=lambda x: int(x, 16), default=None, help='A base address to test')
     parser.add_argument('-x', dest='vx_ver', type=int, default=6, help='VxWorks version (%s)' % ', '.join(map(str, SUPPORTED_VX_VERSIONS)))
+    parser.add_argument('-n', dest='strlen', type=int, default=8, help='The min length for strings to reference')
     parser.add_argument('-v', dest='verbose', action='store_true', help='Whether or not to print out debugging info')
     parser.add_argument('fname', type=str, help='filename of the binary')
     args = parser.parse_args()
@@ -375,9 +425,13 @@ if __name__ == '__main__':
                    endy_str=endy_str, 
                    word_size=args.word_size, 
                    vx_ver=args.vx_ver, 
-                   verbose=args.verbose)
+                   verbose=args.verbose,
+                   strlen=args.strlen,
+                   test_addr=args.test_addr)
 
     symtab = baf.get_symbol_table()
+
+    #baf.get_symbol_addr_clusters()
 
     print('Base Address: 0x%08x' % baf.base_addr)
 

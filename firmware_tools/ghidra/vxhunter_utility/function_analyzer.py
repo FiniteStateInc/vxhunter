@@ -1,5 +1,6 @@
 # coding=utf-8
 from common import *
+from common import logger as common_logger
 from ghidra.app.decompiler import DecompInterface, DecompileOptions, DecompileResults
 from ghidra.program.model.pcode import HighParam, PcodeOp, PcodeOpAST
 from ghidra.program.model.address import GenericAddress
@@ -21,361 +22,213 @@ vxworks_service_keyword = {
     "telnetd": ["telnetdInit"],
 }
 
+decompile_func_cache = {}
 
-decompile_function_cache = {
-
-}
-
-
-class FlowNode(object):
-    def __init__(self, var_node, logger=logger):
-        """ Used to get VarNode value
-
-        :param var_node:
-        """
-        self.var_node = var_node
-        if logger is None:
-            self.logger = logging.getLogger('FlowNode_logger')
-            self.logger.setLevel(logging.INFO)
-            consolehandler = logging.StreamHandler()
-            console_format = logging.Formatter('[%(levelname)-8s][%(module)s.%(funcName)s] %(message)s')
-            consolehandler.setFormatter(console_format)
-            self.logger.addHandler(consolehandler)
-        else:
-            self.logger = logger
-
-    def get_value(self):
-        """ Get VarNode value depend on it's type.
-
-        :return:
-        """
-        if self.var_node.isAddress():
-            self.logger.debug("Var_node isAddress")
-            return self.var_node.getAddress()
-        elif self.var_node.isConstant():
-            self.logger.debug("Var_node isConstant")
-            return self.var_node.getAddress()
-        elif self.var_node.isUnique():
-            self.logger.debug("Var_node isUnique")
-            return calc_pcode_op(self.var_node.getDef())
-        elif self.var_node.isRegister():
-            self.logger.debug("Var_node isRegister")
-            return calc_pcode_op(self.var_node.getDef())
-        elif self.var_node.isPersistant():
-            self.logger.debug("Var_node isPersistant")
-            # TODO: Handler this later
-            return
-        elif self.var_node.isAddrTied():
-            self.logger.debug("Var_node isAddrTied")
-            return calc_pcode_op(self.var_node.getDef())
-        elif self.var_node.isUnaffected():
-            self.logger.debug("Var_node isUnaffected")
-            # TODO: Handler this later
-            return
-        else:
-            self.logger.debug("self.var_node: {}".format(self.var_node))
+BINARY_PCODE_OPS = [PcodeOp.INT_ADD, PcodeOp.PTRSUB, PcodeOp.INT_SUB]
 
 
-def calc_pcode_op(pcode):
-    logger.debug("pcode: {}, type: {}".format(pcode, type(pcode)))
-    if isinstance(pcode, PcodeOpAST):
-        opcode = pcode.getOpcode()
-        if opcode == PcodeOp.PTRSUB:
-            logger.debug("PTRSUB")
-            var_node_1 = FlowNode(pcode.getInput(0))
-            var_node_2 = FlowNode(pcode.getInput(1))
-            value_1 = var_node_1.get_value()
-            value_2 = var_node_2.get_value()
-            if isinstance(value_1, GenericAddress) and isinstance(value_2, GenericAddress):
-                return value_1.offset + value_2.offset
+def get_pcode_value(pcode):
+    '''
+    Get the value of a pcode operation. Will recursively call `get_varnode_value` on the
+    operation's operands.
+    '''
 
-            else:
-                return None
+    # Something might've gone wrong while backtracking (e.g. an unimplemented opcode)
+    # so pcode could be None.
 
-        elif opcode == PcodeOp.CAST:
-            logger.debug("CAST")
-            var_node_1 = FlowNode(pcode.getInput(0))
-            value_1 = var_node_1.get_value()
-            if isinstance(value_1, GenericAddress):
-                return value_1.offset
-
-            else:
-                return None
-
-        elif opcode == PcodeOp.PTRADD:
-            logger.debug("PTRADD")
-            var_node_0 = FlowNode(pcode.getInput(0))
-            var_node_1 = FlowNode(pcode.getInput(1))
-            var_node_2 = FlowNode(pcode.getInput(2))
-            try:
-                value_0_point = var_node_0.get_value()
-                logger.debug("value_0_point: {}".format(value_0_point))
-                if not isinstance(value_0_point, GenericAddress):
-                    return
-                value_0 = toAddr(getInt(value_0_point))
-                logger.debug("value_0: {}".format(value_0))
-                logger.debug("type(value_0): {}".format(type(value_0)))
-                value_1 = var_node_1.get_value()
-                logger.debug("value_1: {}".format(value_1))
-                logger.debug("type(value_1): {}".format(type(value_1)))
-                if not isinstance(value_1, GenericAddress):
-                    logger.debug("value_1 is not GenericAddress!")
-                    return
-                value_1 = get_signed_value(value_1.offset)
-                # TODO: Handle input2 later
-                value_2 = var_node_2.get_value()
-                logger.debug("value_2: {}".format(value_2))
-                logger.debug("type(value_2): {}".format(type(value_2)))
-                if not isinstance(value_2, GenericAddress):
-                    return
-                output_value = value_0.add(value_1)
-                logger.debug("output_value: {}".format(output_value))
-                return output_value.offset
-
-            except Exception as err:
-                logger.debug("Got something wrong with calc PcodeOp.PTRADD : {}".format(err))
-                return None
-
-            except:
-                logger.error("Got something wrong with calc PcodeOp.PTRADD ")
-                return None
-
-        elif opcode == PcodeOp.INDIRECT:
-            logger.debug("INDIRECT")
-            # TODO: Need find a way to handle INDIRECT operator.
-            return None
-
-        elif opcode == PcodeOp.MULTIEQUAL:
-            logger.debug("MULTIEQUAL")
-            # TODO: Add later
-            return None
-
-        elif opcode == PcodeOp.COPY:
-            logger.debug("COPY")
-            logger.debug("input_0: {}".format(pcode.getInput(0)))
-            logger.debug("Output: {}".format(pcode.getOutput()))
-            var_node_0 = FlowNode(pcode.getInput(0))
-            value_0 = var_node_0.get_value()
-            return value_0
-
-    else:
-        logger.debug("Found Unhandled opcode: {}".format(pcode))
+    if pcode is None:
         return None
+
+    opcode = pcode.getOpcode()
+
+    if opcode in BINARY_PCODE_OPS:
+        op1 = get_varnode_value(pcode.getInput(0))
+        op2 = get_varnode_value(pcode.getInput(1))
+
+        if op1 is None or op2 is None:
+            return None
+
+        if opcode == PcodeOp.INT_ADD or opcode == PcodeOp.PTRSUB:
+            return op1 + op2
+
+        elif opcode == PcodeOp.INT_SUB:
+            return op1 - op2
+
+    elif opcode == PcodeOp.PTRADD:
+        op1 = get_varnode_value(pcode.getInput(0))
+        op2 = get_varnode_value(pcode.getInput(1))
+        op3 = get_varnode_value(pcode.getInput(2))
+
+        if op1 is None or op2 is None or op3 is None:
+            return None
+
+        return op1 + op2 * op3
+
+    elif opcode == PcodeOp.INT_2COMP:
+        op = get_varnode_value(pcode.getInput(0))
+
+        if op is None:
+            return None
+
+        return -op
+
+    elif opcode == PcodeOp.COPY or opcode == PcodeOp.CAST:
+        return get_varnode_value(pcode.getInput(0))
+
+    elif opcode == PcodeOp.LOAD:
+        off = get_varnode_value(pcode.getInput(1))
+
+        if off is None:
+            return None
+
+        addr = toAddr(off)
+        space = pcode.getInput(0).getOffset()
+
+        # The offset of the space input specifies the address space to load from.
+        # Right now, we're only handling loads from RAM
+
+        if space == SPACE_RAM:
+            return get_value_from_addr(addr, pcode.getOutput().getSize())
+        else:
+            logging.error('Unhandled load space %d for pcode %s' % (space, pcode))
+
+    logging.error('Unhandled pcode opcode %s pcode %s' % (pcode.getMnemonic(opcode), pcode))
+    return None
+
+
+def get_varnode_value(varnode):
+    '''
+    Get the value of a varnode. Will traverse definitions until a constant is found
+    '''
+    off = varnode.getOffset()
+    addr = toAddr(off)
+
+    # If the parameter is a valid address, then get the bytes in memory at that address.
+    if varnode.isAddress() and varnode.getSpace() == SPACE_RAM and is_address_in_current_program(addr):
+        return get_value_from_addr(addr, varnode.getSize())
+
+    # Otherwise, recursively backtrack from the definition of this varnode.
+    else:
+        defn = varnode.getDef()
+        return get_pcode_value(defn)
 
 
 class FunctionAnalyzer(object):
-
-    def __init__(self, function, timeout=30, logger=logger):
+    def __init__(self, func, timeout=30, logger=None):
         """
-
         :param function: Ghidra function object.
         :param timeout: timeout for decompile.
         :param logger: logger.
         """
-        self.function = function
+        self.func= func
         self.timeout = timeout
+
+        self.logger = logger
+
         if logger is None:
-            self.logger = logging.getLogger('target')
-            self.logger.setLevel(logging.INFO)
-            consolehandler = logging.StreamHandler()
-            console_format = logging.Formatter('[%(levelname)-8s][%(module)s.%(funcName)s] %(message)s')
-            consolehandler.setFormatter(console_format)
-            self.logger.addHandler(consolehandler)
-        else:
-            self.logger = logger
-        self.hfunction = None
+            self.logger = logging.getLogger('Function Analyzer')
+
         self.call_pcodes = {}
-        self.prepare()
+        self.get_all_call_pcode_ops()
 
-    def prepare(self):
-        self.hfunction = self.get_hfunction()
-        self.get_all_call_pcode()
+    def get_high_fn(self):
+        '''
+        Get the high-level decompilation for the function to analyze
+        '''
+        decomp_iface = DecompInterface()
+        decomp_iface.openProgram(cp)
 
-    def get_hfunction(self):
-        decomplib = DecompInterface()
-        decomplib.openProgram(currentProgram)
-        timeout = self.timeout
-        dRes = decomplib.decompileFunction(self.function, timeout, getMonitor())
-        hfunction = dRes.getHighFunction()
-        return hfunction
+        decomp_fn = decomp_iface.decompileFunction(self.func, self.timeout, getMonitor())
+        return decomp_fn.getHighFunction()
 
-    def get_function_pcode(self):
-        if self.hfunction:
-            try:
-                ops = self.hfunction.getPcodeOps()
+    def get_all_call_pcode_ops(self):
+        '''
+        Get a mapping of addr -> pcode for every CALL or CALLIND
+        '''
+        high_fn = self.get_high_fn()
 
-            except:
-                return None
-
-            return ops
-
-    def print_pcodes(self):
-        ops = self.get_function_pcode()
-        while ops.hasNext():
-            pcodeOpAST = ops.next()
-            print(pcodeOpAST)
-            opcode = pcodeOpAST.getOpcode()
-            print("Opcode: {}".format(opcode))
-            if opcode == PcodeOp.CALL:
-                print("We found Call at 0x{}".format(pcodeOpAST.getInput(0).PCAddress))
-                call_addr = pcodeOpAST.getInput(0).getAddress()
-                print("Calling {}(0x{}) ".format(getFunctionAt(call_addr), call_addr))
-                inputs = pcodeOpAST.getInputs()
-                for i in range(len(inputs)):
-                    parm = inputs[i]
-                    print("parm{}: {}".format(i, parm))
-
-    def find_perv_call_address(self, address):
-        try:
-            address_index = sorted(self.call_pcodes.keys()).index(address)
-
-        except Exception as err:
+        if high_fn is None:
             return
 
-        if address_index > 0:
-            perv_address = sorted(self.call_pcodes.keys())[address_index - 1]
-            return self.call_pcodes[perv_address]
-
-    def find_next_call_address(self, address):
-        try:
-            address_index = sorted(self.call_pcodes.keys()).index(address)
-
-        except Exception as err:
-            return
-
-        if address_index < len(self.call_pcodes) - 1:
-            next_address = sorted(self.call_pcodes.keys())[address_index + 1]
-            return self.call_pcodes[next_address]
-
-    def get_all_call_pcode(self):
-        ops = self.get_function_pcode()
-        if not ops:
-            return
+        ops = high_fn.getPcodeOps()
 
         while ops.hasNext():
-            pcodeOpAST = ops.next()
-            opcode = pcodeOpAST.getOpcode()
-            if opcode in [PcodeOp.CALL, PcodeOp.CALLIND]:
-                op_call_addr = pcodeOpAST.getInput(0).PCAddress
-                self.call_pcodes[op_call_addr] = pcodeOpAST
+            pcode = ops.next()
+            opcode = pcode.getOpcode()
 
-    def get_call_pcode(self, call_address):
-        # TODO: Check call_address is in function.
-        if call_address in self.call_pcodes:
-            return self.call_pcodes[call_address]
+            # We only care about CALL or CALLIND pcode ops
+            if opcode not in [PcodeOp.CALL, PcodeOp.CALLIND]:
+                continue
 
-        return
+            call_addr = pcode.getInput(0).getPCAddress()
+            self.call_pcodes[call_addr] = pcode
 
-    def analyze_call_parms(self, call_address):
-        parms = {}
-        # TODO: Check call_address is in function.
-        pcodeOpAST = self.get_call_pcode(call_address)
-        if pcodeOpAST:
-            self.logger.debug("We found target call at 0x{} in function {}(0x{})".format(
-                pcodeOpAST.getInput(0).PCAddress, self.function.name, hex(self.function.entryPoint.offset)))
-            opcode = pcodeOpAST.getOpcode()
-            if opcode == PcodeOp.CALL:
-                target_call_addr = pcodeOpAST.getInput(0).getAddress()
-
-            elif opcode == PcodeOp.CALLIND:
-                target_call_addr = FlowNode(pcodeOpAST.getInput(0)).get_value()
-                self.logger.debug("target_call_addr: {}".format(target_call_addr))
-            # self.logger.debug("Calling {}(0x{}) ".format(getFunctionAt(toAddr(target_call_addr)), target_call_addr))
-            inputs = pcodeOpAST.getInputs()
-            for i in range(len(inputs))[1:]:
-                parm = inputs[i]
-                self.logger.debug("parm{}: {}".format(i, parm))
-                parm_node = FlowNode(parm)
-                parm_value = parm_node.get_value()
-                if isinstance(parm_value, GenericAddress):
-                    parm_value = parm_value.offset
-                parms[i] = parm_value
-                if parm_value:
-                    self.logger.debug("parm{} value: {}".format(i, hex(parm_value)))
-            return parms
-        return
-
-    def get_call_parm_value(self, call_address):
-        parms_value = {}
+    def get_param_values(self, call_address):
+        '''
+        Get the address and pointed to value for every call.
+        If a parameter is not an address, the value is the parameter itself.
+        '''
         if not call_address in self.call_pcodes:
-            return
-        parms = self.analyze_call_parms(call_address)
+            return None
 
-        if not parms:
-            return
+        pcode = self.call_pcodes[call_address]
+        params = pcode.getInputs()[1:]
 
-        for i in parms:
-            self.logger.debug("parms{}: {}".format(i, parms[i]))
-            parm_value = parms[i]
-            self.logger.debug("parm_value: {}".format(parm_value))
-            parm_data = None
-            if parm_value:
-                if is_address_in_current_program(toAddr(parm_value)):
-                    if getDataAt(toAddr(parm_value)):
-                        parm_data = getDataAt(toAddr(parm_value))
-                    elif getInstructionAt(toAddr(parm_value)):
-                        parm_data = getFunctionAt(toAddr(parm_value))
-
-            parms_value["parm_{}".format(i)] = {'parm_value': parm_value,
-                                                'parm_data': parm_data
-                                                }
-
-        return parms_value
+        return [get_varnode_value(param) for param in params]
 
 
-def dump_call_parm_value(call_address, search_functions=None):
+def get_all_call_info(call_address, search_funcs=None):
     """
+    Returns the information about funcs that call `call_address`,
+    primarily the parameters passed.
 
     :param call_address:
-    :param search_functions: function name list to search
-    :return:
+    :param search_funcs: func name list to search
     """
-    target_function = getFunctionAt(call_address)
-    parms_data = {}
-    if target_function:
-        target_references = getReferencesTo(target_function.getEntryPoint())
-        for target_reference in target_references:
-            # Filter reference type
-            reference_type = target_reference.getReferenceType()
-            logger.debug("reference_type: {}".format(reference_type))
-            logger.debug("isJump: {}".format(reference_type.isJump()))
-            logger.debug("isCall: {}".format(reference_type.isCall()))
-            if not reference_type.isCall():
-                logger.debug("skip!")
-                continue
+    target_func = getFunctionAt(call_address)
+    params_data = {}
 
-            call_addr = target_reference.getFromAddress()
-            logger.debug("call_addr: {}".format(call_addr))
-            function = getFunctionContaining(call_addr)
-            logger.debug("function: {}".format(function))
-            if not function:
-                continue
+    if not target_func:
+        return params_data
 
-            # search only targeted function
-            if search_functions:
-                if function.name not in search_functions:
-                    continue
+    target_references = getReferencesTo(target_func.getEntryPoint())
 
-            function_address = function.getEntryPoint()
-            if function_address in decompile_function_cache:
-                target = decompile_function_cache[function_address]
+    for target_reference in target_references:
 
-            else:
-                target = FunctionAnalyzer(function=function)
-                decompile_function_cache[function_address] = target
+        # We only care about calls to the target func
+        reference_type = target_reference.getReferenceType()
+        if not reference_type.isCall():
+            continue
 
-            parms_data[call_addr] = {
-                'call_addr': call_addr,
-                'refrence_function_addr': function.getEntryPoint(),
-                'refrence_function_name': function.name,
-                'parms': {}
-            }
+        call_addr = target_reference.getFromAddress()
 
-            parms_value = target.get_call_parm_value(call_address=call_addr)
-            if not parms_value:
-                continue
+        func = getFunctionContaining(call_addr)
+        if not func:
+            continue
 
-            trace_data = parms_data[call_addr]
-            trace_data['parms'] = parms_value
+        # Search only targeted func
+        if search_funcs and func.name.strip('_') not in search_funcs:
+            continue
 
-        return parms_data
+        func_address = func.getEntryPoint()
+
+        # Get the func analyzer from the cache or create one
+        if func_address in decompile_func_cache:
+            func_analyzer= decompile_func_cache[func_address]
+        else:
+            func_analyzer = FunctionAnalyzer(func)
+            decompile_func_cache[func_address] = func_analyzer
+
+        call_data = {
+            'func_addr': func.getEntryPoint(),
+            'func_name': func.name,
+        }
+
+        # Try to get the parameters to this call
+        params_value = func_analyzer.get_param_values(call_addr)
+        if params_value:
+            call_data['params'] = params_value
+
+        params_data[call_addr] = call_data
+
+    return params_data

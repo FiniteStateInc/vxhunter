@@ -2,6 +2,7 @@
 import logging
 import re
 import struct
+from vxhunter_utility.common import logger as common_logger
 from vxhunter_utility.ba import BAFinder
 
 function_name_key_words = ['bzero', 'usrInit', 'bfill']
@@ -19,39 +20,39 @@ class VxTarget(object):
         """
         self.symbols = []
         self.load_address = None
+        self.symtab_start = None
+        self.symtab_end = None
+        self.logger = logger
 
         if logger is None:
-            self.logger = logging.getLogger(__name__)
-            self.logger.setLevel(logging.INFO)
-            consolehandler = logging.StreamHandler()
-            console_format = logging.Formatter('[%(levelname)-8s][%(module)s.%(funcName)s] %(message)s')
-            consolehandler.setFormatter(console_format)
-            self.logger.addHandler(consolehandler)
-        else:
-            self.logger = logger
+            self.logger = common_logger
 
         endy_str = ['<', '>'][int(big_endian)]
 
+        # Instantiate the BAFinder object that does all the heavy lifting.
         ba = BAFinder(firmware_path, 
                       firmware, 
                       endy_str=endy_str, 
                       word_size=word_size, 
                       vx_ver=vx_version,
-                      logger=logger,
+                      logger=self.logger,
                       verbose=True)
 
+        # Bail if the BAFinder did not find a good base address
         if not ba.is_base_addr_good():
             self.logger.error('Could not find valid base address. Aborting')
             exit()
 
+        # Get the symbol table and base address from the BAFinder
         self.symbols = ba.get_symbol_table()
         self.load_address = ba.base_addr
 
         if len(self.symbols) >= 2:
             symbol_offsets = [sym['offset'] for sym in self.symbols]
-            self.symbol_table_start = min(symbol_offsets)
-            self.symbol_table_end = max(symbol_offsets)
+            self.symtab_start = min(symbol_offsets)
+            self.symtab_end = max(symbol_offsets)
 
 
-    def get_symbols(self):
-        return self.symbols
+    def has_symbol_table(self):
+        return not (self.symtab_start is None or self.symtab_end is None)
+
