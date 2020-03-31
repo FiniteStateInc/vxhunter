@@ -78,6 +78,6 @@ if __name__ == '__main__':
     process_symbol_table(target)
 
     # Ghidra probably has something to say after all the changes we've made.
-    logging.info('Re-analyzing')
-    analyze(cp)
+    #logging.info('Re-analyzing')
+    #analyze(cp)
 

@@ -117,7 +117,7 @@ class VxAnalyzer(object):
         target_function = get_function(func_name)
 
         if not target_function:
-            logging.info('Can\'t find loginUserAdd function in firmware')
+            logging.info('Can\'t find function %s' % func_name)
             return
 
         # Get all calls to the login function.
