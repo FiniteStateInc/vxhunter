@@ -163,6 +163,25 @@ class FunctionAnalyzer(object):
             call_addr = pcode.getInput(0).getPCAddress()
             self.call_pcodes[call_addr] = pcode
 
+    def get_call_addr(self, func_addr):
+        '''
+        Get the call site to `func_addr` in the current function is it exists
+        '''
+        for call_addr, pcode in self.call_pcodes.items():
+            to_addr = get_varnode_value(pcode.getInput(0))
+
+            if to_addr.offset == func_addr.offset:
+                return call_addr
+
+        return None
+
+    def get_call_addr_from_call_sites(self, call_sites):
+        for call_addr in self.call_pcodes.keys():
+            if call_addr in call_sites:
+                return call_addr
+
+        return None
+
     def get_param_values(self, call_address):
         '''
         Get the address and pointed to value for every call.
@@ -176,15 +195,23 @@ class FunctionAnalyzer(object):
 
         return [get_varnode_value(param) for param in params]
 
+    def get_all_param_values(self):
+        '''
+        Get the parameter value for every call within the current function
+        '''
+        param_vals = {}
 
-def get_all_call_info(call_address, search_funcs=None):
-    """
-    Returns the information about funcs that call `call_address`,
-    primarily the parameters passed.
+        for call_addr, pcode in self.call_pcodes.items():
+            param_vals[call_addr] = self.get_param_values(call_addr)
 
-    :param call_address:
-    :param search_funcs: func name list to search
-    """
+        return param_vals
+
+
+def get_all_calls_to_addr(call_address, search_funcs=None):
+    '''
+    Return the functions that call the function at `call_address` along with the
+    parameters passed.
+    '''
     target_func = getFunctionAt(call_address)
     params_data = {}
 
@@ -210,14 +237,14 @@ def get_all_call_info(call_address, search_funcs=None):
         if search_funcs and func.name.strip('_') not in search_funcs:
             continue
 
-        func_address = func.getEntryPoint()
+        func_addr = func.getEntryPoint()
 
         # Get the func analyzer from the cache or create one
-        if func_address in decompile_func_cache:
-            func_analyzer= decompile_func_cache[func_address]
+        if func_addr in decompile_func_cache:
+            func_analyzer = decompile_func_cache[func_addr]
         else:
             func_analyzer = FunctionAnalyzer(func)
-            decompile_func_cache[func_address] = func_analyzer
+            decompile_func_cache[func_addr] = func_analyzer
 
         call_data = {
             'func_addr': func.getEntryPoint(),
@@ -232,3 +259,46 @@ def get_all_call_info(call_address, search_funcs=None):
         params_data[call_addr] = call_data
 
     return params_data
+
+
+def get_calls_in_func(func, target_func_addrs=None):
+    '''
+    Get the functions called, and parameters passed to them, from within a function.
+    '''
+
+    func_addr = func.getEntryPoint()
+    call_params = {}
+
+    # Get the func analyzer from the cache or create one
+    if func_addr in decompile_func_cache:
+        func_analyzer = decompile_func_cache[func_addr]
+    else:
+        func_analyzer = FunctionAnalyzer(func)
+        decompile_func_cache[func_addr] = func_analyzer
+
+    # If we are not searching for any functions in specific, just return the parameters to all calls.
+    if target_func_addrs is None:
+        return func_analyzer.get_all_param_values()
+        
+    # Otherwise, return just the parameters for the target functions.
+    for target_func_addr in target_func_addrs:
+
+        # We first need to get the address of the call to our target function.
+        #
+        # To do this, we get all the calls to the target address and check to make
+        # sure that one of the functions called in `func` is one of these references.
+        refs = getReferencesTo(target_func_addr)
+        refs = filter(lambda x: x.getReferenceType().isCall(), refs)
+
+        call_sites = map(lambda x: x.getFromAddress(), refs)
+        call_addr = func_analyzer.get_call_addr_from_call_sites(call_sites)
+
+        if call_addr is None:
+            continue
+
+        params = func_analyzer.get_param_values(call_addr)
+        if params is None:
+            continue
+
+        call_params[target_func_addr] = params
+

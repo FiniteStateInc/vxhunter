@@ -1,4 +1,5 @@
 import json
+from functools import reduce
 
 from ghidra.program.model.symbol import RefType, SourceType
 
@@ -36,8 +37,8 @@ class VxAnalyzer(object):
             return
 
         # Get the parameters of all calls to bzero in sysStart and usrInit.
-        calls = get_all_call_info(target_function.getEntryPoint(), 
-                                  search_funcs=['sysStart', 'usrInit'])
+        calls = get_all_calls_to_addr(target_function.getEntryPoint(), 
+                                      search_funcs=['sysStart', 'usrInit'])
 
         for call_addr, call_data in calls.items():
             if not 'params' in call_data:
@@ -54,6 +55,7 @@ class VxAnalyzer(object):
             if bss_start is None or bss_len is None:
                 continue
 
+            # TODO: Label these addresses
             bss_end = bss_start + bss_len 
 
             # Don't recreate the segment if we've already created it or it's already mapped.
@@ -111,17 +113,61 @@ class VxAnalyzer(object):
             break
 
 
+    def get_bootline(self):
+        '''
+        Get the bootline of the firmware since it has lots of juicy information in it.
+        '''
+        logging.info('[Getting bootline]')
+
+        # The bootline will be strcpy'd or memcpy'd at the end of the 
+        # usrBootLineInit function.
+        bootline_func = get_function('usrBootLineInit')
+
+        if bootline_func is None:
+            logging.info('Can\'t find usrBootLineInit')
+            return
+
+        # Get the address for the two functions we have seen to copy the bootline.
+        cpy_func_names = ['memcpy', 'strcpy']
+        cpy_func_addrs = []
+
+        for cpy_func_name in cpy_func_names:
+            cpy_func = get_function(cpy_func_name)
+
+            if cpy_func is None:
+                logging.info('Can\'t find %s' % cpy_func_name)
+                continue
+
+            cpy_func_addrs.append(cpy_func.getEntryPoint())
+
+        # Get the value of the second parameter to the last copy function
+        # called from usrBootLineInit.
+        cpy_calls = get_calls_in_func(bootline_func, cpy_func_addrs)
+        cpy_calls = sorted(cpy_calls.items(), key=lambda kv: kv[0])
+
+        for _, params in cpy_calls[::-1]:
+            if len(params) < 2 or params[1] is None:
+                continue
+
+            bootline = get_string_from_addr(toAddr(params[1]))
+            logging.info('Found bootline: %s' % bootline)
+
+            self.report['bootline'] = bootline
+
+        logging.info('Couldn\'t find a call to a copy function in usrBootLineInit')
+
+
     def analyze_login_function(self, func_name, user_param_idx, pw_param_idx):
         logging.info('[Analyzing %s]' % func_name)
 
         target_function = get_function(func_name)
 
-        if not target_function:
+        if target_function is None:
             logging.info('Can\'t find function %s' % func_name)
             return
 
         # Get all calls to the login function.
-        calls = get_all_call_info(target_function.getEntryPoint())
+        calls = get_all_calls_to_addr(target_function.getEntryPoint())
 
         for call_addr, call_data in calls.items():
             if not 'params' in call_data:
@@ -251,7 +297,7 @@ class VxAnalyzer(object):
             logging.error("Can't find symFindByName function in firmware")
             return
 
-        calls = get_all_call_info(call_address=target_function.getEntryPoint())
+        calls = get_all_calls_to_addr(call_address=target_function.getEntryPoint())
 
         logging.debug("Found %d symFindByName call" % len(calls))
 
@@ -305,6 +351,7 @@ class VxAnalyzer(object):
         self.add_system_symbols()
         self.add_function_xrefs_from_symbol_find()
         self.analyze_login_accouts()
+        self.get_bootline()
         self.analyze_available_services()
 
 
