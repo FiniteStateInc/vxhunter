@@ -150,9 +150,10 @@ class VxAnalyzer(object):
                 continue
 
             bootline = get_string_from_addr(toAddr(params[1]))
-            logging.info('Found bootline: %s' % bootline)
-
             self.report['bootline'] = bootline
+
+            logging.info('Found bootline: %s' % bootline)
+            return
 
         logging.info('Couldn\'t find a call to a copy function in usrBootLineInit')
 
