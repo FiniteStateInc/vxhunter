@@ -239,6 +239,20 @@ def get_strings(fname, n=8):
 
 class BAFinder(object):
     def __init__(self, fname, data, endy_str='<', word_size=4, vx_ver=6, verbose=False, logger=None, strlen=8, test_addr=None):
+        '''
+        Initialize the base finder object, find the strings, symbol table, and base address.
+
+        fname:      The file name of the firmware on disk.
+        data:       The contents of the firmware binary file.
+        endy_str:   '<' or '>' depending on the endianness of the target arch.
+        word_size:  The word size of the target arch (1, 2, 4, or 8).
+        vx_ver:     5 or 6 depending on the target VxWorks version.
+        verbose:    Whether or not to print logging/debugging info.
+        logger:     Optional logger object.
+        strlen:     Minimum length of strings to use in base-finding algorithm.
+        test_addr:  A candidate base address to test. If this is not None,
+                        the base-find algorithm is not performed.
+        '''
         self.fname = fname
         self.data = data
         self.base_addr = 0
@@ -294,6 +308,14 @@ class BAFinder(object):
 
 
     def is_base_addr_good(self, T=0.5, ba=None):
+        '''
+        Check to see if the base address is good. The criteria for good is that
+        at least `T` percent of the strings at least `self.strlen` characters long
+        are referenced.
+
+        If `ba` is not None, we are testing an explicit base address, otherwise, we are
+        testing `self.base_addr`.
+        '''
         if ba is not None and hasattr(self, 'ref_ratio'):
             delattr(self, 'ref_ratio')
         else:
@@ -309,6 +331,10 @@ class BAFinder(object):
 
 
     def get_ref_ratio(self):
+        '''
+        Calculate, store, and return the ratio of strings in `self.strab` that are referenced
+        with a base address of `self.base_addr`.
+        '''
         if hasattr(self, 'ref_ratio'):
             return self.ref_ratio
 
@@ -319,6 +345,9 @@ class BAFinder(object):
 
 
     def get_symbol_table(self):
+        '''
+        Get the name for each symbol and return the VxWorks symbol table.
+        '''
         # python2/3 things for getting strings
         if type(self.data) == str: 
             convert_fn = str
@@ -328,9 +357,11 @@ class BAFinder(object):
             null_terminator = 0
 
         for i, sym in enumerate(self.symtab):
+            # Check if "strings" already returned the name.
             try:
                 self.symtab[i]['name'] = self.all_strings[sym['name_addr'] - self.base_addr]
 
+            # Otherwise, get the ascii string at the name address.
             except KeyError:
                 off = self.symtab[i]['name_addr'] - self.base_addr
                 sym_name = ''
@@ -345,7 +376,11 @@ class BAFinder(object):
 
 
     def get_symbol_addr_clusters(self):
-        # sort the symbol table by destination address
+        '''
+        Experimental function to create a memory map based on clusters of symbol addresses.
+        Doesn't really work right now.
+        '''
+        # Sort the symbol table by destination address.
         self.symtab = sorted(self.symtab, key=lambda x: x['dest_addr'])
 
         regions = []

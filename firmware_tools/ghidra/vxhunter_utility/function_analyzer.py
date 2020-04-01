@@ -91,6 +91,7 @@ def get_pcode_value(pcode):
             return get_value_from_addr(addr, pcode.getOutput().getSize())
         else:
             logging.error('Unhandled load space %d for pcode %s' % (space, pcode))
+            return None
 
     logging.error('Unhandled pcode opcode %s pcode %s' % (pcode.getMnemonic(opcode), pcode))
     return None
@@ -176,6 +177,10 @@ class FunctionAnalyzer(object):
         return None
 
     def get_call_addr_from_call_sites(self, call_sites):
+        '''
+        Return the first address of a call instruction in the current function
+        that is in `call_sites`.
+        '''
         for call_addr in self.call_pcodes.keys():
             if call_addr in call_sites:
                 return call_addr
@@ -265,7 +270,6 @@ def get_calls_in_func(func, target_func_addrs=None):
     '''
     Get the functions called, and parameters passed to them, from within a function.
     '''
-
     func_addr = func.getEntryPoint()
     call_params = {}
 

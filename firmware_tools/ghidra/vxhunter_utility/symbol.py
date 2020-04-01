@@ -94,7 +94,6 @@ def get_symbol(name, prefix="_"):
     '''
     Get the predefined symbol from the program.
     '''
-
     namespace = cp.getGlobalNamespace()
     symbols = getSymbols(name, namespace)
 
