@@ -2,6 +2,7 @@
 from ghidra.app.util.demangler import DemangledException
 from ghidra.app.util.demangler.gnu import GnuDemangler
 from ghidra.program.model.mem import Memory
+from ghidra.program.model.address import GenericAddress
 from ghidra.util.task import TaskMonitor
 from ghidra.program.flatapi import FlatProgramAPI
 import struct as st
@@ -154,7 +155,16 @@ def get_value_from_addr(addr, size):
     '''
     Dereference an address in the current program.
     '''
+    if not isinstance(addr, GenericAddress): addr = toAddr(addr)
     return get_value(fp.getBytes(addr, size))
+
+
+def read_data_at(addr, size):
+    '''
+    Read `size` bytes at address `addr`.
+    '''
+    if not isinstance(addr, GenericAddress): addr = toAddr(addr)
+    return fp.getBytes(addr, size)
 
 
 def maybe_define_string(addr):
@@ -177,6 +187,9 @@ def maybe_define_string(addr):
         s += char
         strlen += 1
         ptr = ptr.add(1)
+
+    if strlen == 0: # don't define an empty string
+        return None
 
     if createAsciiString(addr, strlen) is None: # try to create the string
         return None
@@ -202,6 +215,7 @@ def get_string_from_addr(addr):
     '''
     Get the string defined at `addr` or the address if no string is defined.
     '''
+    if not isinstance(addr, GenericAddress): addr = toAddr(addr)
     s = maybe_get_string_at(addr)
 
     if s is None:
@@ -209,6 +223,12 @@ def get_string_from_addr(addr):
 
     return s
 
+
+def auto_analyze():
+    '''
+    Perform Ghidra auto-analysis.
+    '''
+    analyze(cp)
 
 
 '''
@@ -228,23 +248,22 @@ def do_memory_op(op, *args):
 def create_uninitialized_block(name, start, length, overlay=False):
     return do_memory_op(mem.createUninitializedBlock, name, start, length, overlay)
 
-
 def create_initialized_block(name, start, length, fill=0, monitor=TaskMonitor.DUMMY, overlay=False):
     return do_memory_op(mem.createInitializedBlock, name, start, length, fill, monitor, overlay)
-
 
 def move_block(block, addr, monitor=TaskMonitor.DUMMY):
     return do_memory_op(mem.moveBlock, block, addr, monitor)
 
-
 def split_block(block, addr):
     return do_memory_op(mem.split, block, addr)
 
-
 def split_main_memory(addr):
-    return split_block(cp.memory.blocks[0], addr)
-
+    return split_block(mem.blocks[0], addr)
 
 def join_blocks(b1, b2):
     return do_memory_op(mem.join, b1, b2)
+
+def get_main_memory():
+    if len(mem.blocks) == 0: return None
+    return mem.blocks[0]
 

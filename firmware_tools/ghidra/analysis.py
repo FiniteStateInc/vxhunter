@@ -3,7 +3,6 @@ from functools import reduce
 
 from ghidra.program.model.symbol import RefType, SourceType
 
-from vxhunter_core import *
 from vxhunter_utility.common import *
 from vxhunter_utility.function_analyzer import *
 from vxhunter_utility.symbol import *
@@ -347,7 +346,7 @@ class VxAnalyzer(object):
                                        0)
 
 
-    def start_analyzer(self):
+    def analyze(self):
         self.create_bss()
         self.add_system_symbols()
         self.add_function_xrefs_from_symbol_find()
@@ -355,8 +354,3 @@ class VxAnalyzer(object):
         self.get_bootline()
         self.analyze_available_services()
 
-
-if __name__ == '__main__':
-    analyzer = VxAnalyzer()
-    analyzer.start_analyzer()
-    print(analyzer.report)

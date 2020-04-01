@@ -8,7 +8,7 @@ import sys
 # Constants from common
 from common import can_demangle, word_size
 # Objects from common
-from common import demangler
+from common import demangler, cp
 # Functions from common
 from common import is_address_in_current_program
 
