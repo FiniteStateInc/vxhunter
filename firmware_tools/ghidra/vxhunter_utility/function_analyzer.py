@@ -306,3 +306,5 @@ def get_calls_in_func(func, target_func_addrs=None):
 
         call_params[target_func_addr] = params
 
+    return call_params
+
