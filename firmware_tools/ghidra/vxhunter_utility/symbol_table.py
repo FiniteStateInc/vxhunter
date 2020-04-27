@@ -162,6 +162,9 @@ def get_symtab_bounds(blk, vx_ver, symbol_fn, verbose=False, logger=None):
                 i += word_size
                 continue
 
+        if i == 0x636168:
+            print('dest address in')
+
         symtab.append(sym)
 
         # increase the cursor by the symbol size since we have a valid symbol
@@ -169,12 +172,12 @@ def get_symtab_bounds(blk, vx_ver, symbol_fn, verbose=False, logger=None):
 
         # if we have 100 consecutive symbols, assume that this is indeed the symbol table
         if len(symtab) >= SYMTAB_MIN_COUNT:
-            log('Symbol table found at 0x%08x' % symtab[0]['offset'], logger, verbose)
             break
 
     
     # throw out the candidate symbol table and return if it's below the threshold count
     if len(symtab) < SYMTAB_MIN_COUNT:
+        log('Only %d consecutive symbols found' % len(symtab), logger, verbose)
         return None
 
     symtab = sorted(symtab, key=lambda x: x['offset'])

@@ -1,7 +1,7 @@
 # coding=utf-8
 import logging
 
-from vxhunter_utility.common import get_vxworks_version, get_main_memory, auto_analyze
+from vxhunter_utility.common import get_vxworks_version, get_main_memory, auto_analyze, get_memory_blocks
 from vxhunter_utility.symbol import add_symbol, get_symbol, create_symbol_table
 from vxhunter_utility.symbol_table import get_symtab_bounds
 from analysis import VxAnalyzer
@@ -12,21 +12,32 @@ def define_symbol_table():
     if get_symbol('vxSymTbl') is not None:
         return True
 
+    '''
     blk = get_main_memory()
     if blk is None:
         logging.error('No main memory block in program.')
         return False
+    '''
 
     # Try to get the symbol table bounds
-    symtab_bounds = get_symtab_bounds(blk,
-                                      vx_ver,
-                                      add_symbol_wrapper,
-                                      verbose=True,
-                                      logger=logging)
+    symtab_bounds = None
+
+    for blk in get_memory_blocks():
+        symtab_bounds = get_symtab_bounds(blk,
+                                          vx_ver,
+                                          add_symbol_wrapper,
+                                          verbose=True,
+                                          logger=logging)
+
+        if symtab_bounds is not None:
+            break
+
+
     if symtab_bounds is None:
         logging.error('Could not find symbol table bounds.')
         return False
 
+    logging.info(symtab_bounds)
     symtab_start, symtab_end = symtab_bounds
 
     # Create the symbol table struct.

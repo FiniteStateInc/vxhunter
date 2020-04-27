@@ -122,7 +122,7 @@ for flag in vx_6_symbol_type_enum:
 vx_6_symtbl_dt = StructureDataType("VX_6_SYMBOL_IN_TBL", 0x14)
 vx_6_symtbl_dt.replaceAtOffset(0, unsigned_int_type, 4, "symHashNode", "")
 vx_6_symtbl_dt.replaceAtOffset(4, char_ptr_type, 4, "symNamePtr", "")
-vx_6_symtbl_dt.replaceAtOffset(8, void_ptr_type, 4, "symPrt", "")
+vx_6_symtbl_dt.replaceAtOffset(8, void_ptr_type, 4, "symPtr", "")
 vx_6_symtbl_dt.replaceAtOffset(0x0c, unsigned_int_type, 4, "symRef", "moduleId of module, or predefined SYMREF")
 vx_6_symtbl_dt.replaceAtOffset(0x10, short_data_type, 4, "symGroup", "")
 vx_6_symtbl_dt.replaceAtOffset(0x12, vx_6_sym_enum, 1, "symType", "")

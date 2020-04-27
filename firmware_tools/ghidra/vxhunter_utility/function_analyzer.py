@@ -121,7 +121,7 @@ class FunctionAnalyzer(object):
         :param timeout: timeout for decompile.
         :param logger: logger.
         """
-        self.func= func
+        self.func = func
         self.timeout = timeout
 
         self.logger = logger

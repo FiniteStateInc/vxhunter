@@ -118,15 +118,22 @@ def get_vxworks_version():
     return get_vxworks_version_from_user()
 
 
+def is_offset_in_current_program(off):
+    '''
+    Return whether or not `off` is in a defined memory region.
+    '''
+    for block in cp.memory.blocks:
+        if block.start.offset <= off <= block.end.offset:
+            return True
+
+    return False
+
+
 def is_address_in_current_program(addr):
     '''
     Return whether or not `addr` is in a defined memory region.
     '''
-    for block in cp.memory.blocks:
-        if block.start.offset <= addr.offset <= block.end.offset:
-            return True
-
-    return False
+    return is_offset_in_current_program(addr.offset)
 
 
 def get_value(data, signed=False, size=None):
@@ -176,7 +183,10 @@ def maybe_define_string(addr):
     ptr = toAddr(addr.offset)
 
     while getDataAt(ptr) is None:
-        char = chr(fp.getBytes(ptr, 1)[0]) # read one byte at a time
+        try:
+            char = chr(fp.getBytes(ptr, 1)[0]) # read one byte at a time
+        except:
+            return None
 
         if char == '\x00':                 # break if it's a null terminator
             break
@@ -262,6 +272,9 @@ def split_main_memory(addr):
 
 def join_blocks(b1, b2):
     return do_memory_op(mem.join, b1, b2)
+
+def get_memory_blocks():
+    return mem.blocks
 
 def get_main_memory():
     if len(mem.blocks) == 0: return None
