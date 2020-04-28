@@ -3,10 +3,10 @@ from ghidra.program.model.pcode import HighParam, PcodeOp, PcodeOpAST
 from ghidra.program.model.address import GenericAddress
 from ghidra.program.database.code import DataDB
 
-from common import print_err, cp, fp, SPACE_RAM, SPACE_CONST, is_address_in_current_program, get_value_from_addr
+from common import print_err, cp, fp, SPACE_RAM, SPACE_CONST, is_address_in_current_program, get_value_from_addr, get_value, pack
 
 
-BINARY_PCODE_OPS = [PcodeOp.INT_ADD, PcodeOp.PTRSUB, PcodeOp.INT_SUB]
+BINARY_PCODE_OPS = [PcodeOp.INT_ADD, PcodeOp.PTRSUB, PcodeOp.INT_SUB, PcodeOp.INT_MULT]
 
 decompile_func_cache = {}
 
@@ -30,10 +30,14 @@ def get_pcode_value(pcode):
         op2 = get_varnode_value(pcode.getInput(1))
 
         if op1 is None or op2 is None:
+            print('Binary op in %s, %s is none %s' % (op1, op2, pcode))
             return None
 
         if opcode == PcodeOp.INT_ADD or opcode == PcodeOp.PTRSUB:
             return op1 + op2
+
+        elif opcode == PcodeOp.INT_MULT:
+            return op1 * op2
 
         elif opcode == PcodeOp.INT_SUB:
             return op1 - op2
@@ -44,6 +48,7 @@ def get_pcode_value(pcode):
         op3 = get_varnode_value(pcode.getInput(2))
 
         if op1 is None or op2 is None or op3 is None:
+            print_err('Binary op is none %s' % pcode)
             return None
 
         return op1 + op2 * op3
@@ -107,7 +112,7 @@ def get_varnode_value(varnode):
     '''
     Get the value of a varnode. Will traverse definitions until a constant is found
     '''
-    off = varnode.getOffset()
+    off = varnode.offset
     addr = fp.toAddr(off)
 
     # If the parameter is a valid address, then get the bytes in memory at that address.
@@ -115,8 +120,9 @@ def get_varnode_value(varnode):
         return get_value_from_addr(addr, varnode.size)
 
     # Or it could a const pointer in which the offset itself is the pointer
-    elif varnode.space == SPACE_CONST and is_address_in_current_program(addr):
-        return off
+    elif varnode.space == SPACE_CONST:
+        size = varnode.size
+        return get_value(pack(off, size=size), size=size, signed=True)
 
     # Otherwise, recursively backtrack from the definition of this varnode.
     else:

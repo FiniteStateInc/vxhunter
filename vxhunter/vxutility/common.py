@@ -96,6 +96,18 @@ def is_address_in_current_program(addr):
     return is_offset_in_current_program(addr.offset)
 
 
+def pack(val, signed=False, size=None):
+    if size is None:
+        size = word_size
+
+    fmt = endy_str + ['B', 'H', 'I', 'Q'][int(math.log(size, 2))]
+
+    if signed:
+        fmt = fmt.lower()
+
+    return st.pack(fmt, val)
+
+
 def get_value(data, signed=False, size=None):
     '''
     Wrapper around `struck.unpack` with different options on size and whether

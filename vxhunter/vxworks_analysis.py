@@ -370,8 +370,11 @@ script_name, vx_ver = get_args()
 if script_name is None or vx_ver is None:
     exit()
 
+# Try to create the bss section by looking for calls to bzero.
 create_bss()
 add_function_xrefs_from_symbol_find()
+
+# Look at VxWorks specific functions to try to improve the analysis report.
 accounts = get_login_accouts()
 bootline = get_bootline()
 services = get_available_services(vx_ver)
