@@ -3,12 +3,13 @@ from ghidra.program.model.pcode import HighParam, PcodeOp, PcodeOpAST
 from ghidra.program.model.address import GenericAddress
 from ghidra.program.database.code import DataDB
 
-from common import print_err, cp, fp, SPACE_RAM, SPACE_CONST, is_address_in_current_program, get_value_from_addr, get_value, pack
+from common import print_err, cp, fp, is_address_in_current_program, get_value_from_addr, get_value, pack
 
 
 BINARY_PCODE_OPS = [PcodeOp.INT_ADD, PcodeOp.PTRSUB, PcodeOp.INT_SUB, PcodeOp.INT_MULT]
 
 decompile_func_cache = {}
+space_ram = None
 
 
 def get_pcode_value(pcode):
@@ -30,7 +31,7 @@ def get_pcode_value(pcode):
         op2 = get_varnode_value(pcode.getInput(1))
 
         if op1 is None or op2 is None:
-            print('Binary op in %s, %s is none %s' % (op1, op2, pcode))
+            print_err('Binary op in %s, %s is none %s' % (op1, op2, pcode))
             return None
 
         if opcode == PcodeOp.INT_ADD or opcode == PcodeOp.PTRSUB:
@@ -98,7 +99,7 @@ def get_pcode_value(pcode):
         # The offset of the space input specifies the address space to load from.
         # Right now, we're only handling loads from RAM
 
-        if space == SPACE_RAM:
+        if space_ram is not None and space == space_ram:
             return get_value_from_addr(addr, pcode.output.size)
         else:
             print_err('Unhandled load space %d for pcode %s' % (space, pcode))
@@ -115,14 +116,24 @@ def get_varnode_value(varnode):
     off = varnode.offset
     addr = fp.toAddr(off)
 
+    # Please someone tell me a different/easier way of comparing the address space of a varnode without knowing it a priori.
+    # I mean I had to look at the Ghidra source code to even know how to do this. Come on, man.
+    space = varnode.getAddress().addressSpace.name
+
+    # Also, we need the actual integer ID because the address space in LOAD is in the offset. This is a shit show.
+    global space_ram
+
+    if space_ram is None and space == 'ram':
+        space_ram = varnode.space
+
     # If the parameter is a valid address, then get the bytes in memory at that address.
-    if varnode.isAddress() and varnode.space == SPACE_RAM and is_address_in_current_program(addr):
+    if varnode.isAddress() and space == 'ram' and is_address_in_current_program(addr):
         return get_value_from_addr(addr, varnode.size)
 
     # Or it could a const pointer in which the offset itself is the pointer
-    elif varnode.space == SPACE_CONST:
+    elif space == 'const':
         size = varnode.size
-        return get_value(pack(off, size=size), size=size, signed=True)
+        return get_value(pack(off, size=size), signed=True)
 
     # Otherwise, recursively backtrack from the definition of this varnode.
     else:

@@ -18,9 +18,6 @@ cp = currentProgram
 fp = FlatProgramAPI(cp)
 mem = cp.memory
 
-SPACE_RAM = 417
-SPACE_CONST = 48
-
 SUPPORTED_VX_VERSIONS = [5, 6]
 
 # Init program metadata
@@ -108,18 +105,14 @@ def pack(val, signed=False, size=None):
     return st.pack(fmt, val)
 
 
-def get_value(data, signed=False, size=None):
+def get_value(data, signed=False):
     '''
     Wrapper around `struck.unpack` with different options on size and whether
     to interpret at signed.
     '''
 
-    # Use `word_size` as a default size.
-    if size is None:
-        size = word_size 
-
     # Get the struct format based on size and signed
-    fmt = endy_str + ['B', 'H', 'I', 'Q'][int(math.log(size, 2))]
+    fmt = endy_str + ['B', 'H', 'I', 'Q'][int(math.log(len(data), 2))]
 
     if signed:
         fmt = fmt.lower()
