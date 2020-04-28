@@ -359,27 +359,8 @@ def add_function_xrefs_from_symbol_find():
                                    0)
 
 
-
-script_name = None
-vx_ver = None
-
-if isRunningHeadless():
-    # Start by making sure we were passed a script name and a VxWorks version (5 or 6)
-    args = getScriptArgs()
-
-    if len(args) < 2:
-        print_err('Must pass a script name and a VxWorks version')
-        exit()
-
-    # Make sure our VxWorks version is valid
-    script_name = args[0]
-    vx_ver = args[1]
-else:
-    script_name = sys.argv[0]
-    vx_ver = int(askChoice('Pick a VxWorks Version', '...if you dare!', SUPPORTED_VX_VERSIONS, SUPPORTED_VX_VERSIONS[0]))
-
-if vx_ver not in SUPPORTED_VX_VERSIONS:
-    print_err('VxWorks version must be in %s' % ', '.join([int(v) for v in SUPPORTED_VX_VERSIONS]), script_name)
+script_name, vx_ver = get_args()
+if script_name is None or vx_ver is None:
     exit()
 
 create_bss()

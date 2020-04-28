@@ -32,6 +32,32 @@ endy_str = ['<', '>'][is_big_endian]
 word_str = ['B', 'H', 'I', 'Q'][int(math.log(word_size, 2))]
 
 
+def get_args():
+    script_name = None
+    vx_ver = None
+
+    if isRunningHeadless():
+        # Start by making sure we were passed a script name and a VxWorks version
+        args = getScriptArgs()
+
+        if len(args) < 2:
+            print_err('Must pass a script name and a VxWorks version')
+        else:
+            # Make sure our VxWorks version is valid
+            script_name = args[0]
+            vx_ver = int(args[1])
+    else:
+        script_name = sys.argv[0]
+        vx_ver = int(askChoice('Pick a VxWorks Version', '...if you dare!', SUPPORTED_VX_VERSIONS, SUPPORTED_VX_VERSIONS[0]))
+
+    # Make sure our VxWorks version is 5 or 6
+    if vx_ver not in SUPPORTED_VX_VERSIONS:
+        print_err('VxWorks version must be in %s' % ', '.join([int(v) for v in SUPPORTED_VX_VERSIONS]), script_name)
+        vx_ver = None
+
+    return script_name, vx_ver
+
+
 def print_out(msg, script_name=None):
     if script_name is not None:
         msg = '%s: %s' % (script_name, msg)
