@@ -72,7 +72,9 @@ def get_pcode_value(pcode):
         op1 = pcode.getInput(0)
 
         for i in range(1, pcode.numInputs + 1):
-            if pcode.getInput(i) != op1:
+            opi = pcode.getInput(i)
+
+            if op1.space != opi.space or op1.offset != opi.offset or op1.size != opi.size:
                 print_err('Unhandled multiequal on differing inputs: %s' % pcode)
                 return None
 
