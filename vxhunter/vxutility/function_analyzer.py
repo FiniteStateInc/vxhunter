@@ -31,7 +31,6 @@ def get_pcode_value(pcode):
         op2 = get_varnode_value(pcode.getInput(1))
 
         if op1 is None or op2 is None:
-            print_err('Binary op in %s, %s is none %s' % (op1, op2, pcode))
             return None
 
         if opcode == PcodeOp.INT_ADD or opcode == PcodeOp.PTRSUB:
@@ -49,7 +48,6 @@ def get_pcode_value(pcode):
         op3 = get_varnode_value(pcode.getInput(2))
 
         if op1 is None or op2 is None or op3 is None:
-            print_err('Binary op is none %s' % pcode)
             return None
 
         return op1 + op2 * op3
@@ -90,7 +88,6 @@ def get_pcode_value(pcode):
         off = get_varnode_value(pcode.getInput(1))
 
         if off is None:
-            print_err('LOAD source is None')
             return None
 
         addr = fp.toAddr(off)
