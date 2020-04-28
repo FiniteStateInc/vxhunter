@@ -10,9 +10,9 @@ from ghidra.program.model.listing import ParameterImpl
 from ghidra.program.model.listing.Function import FunctionUpdateType
 from ghidra.program.model.lang import PrototypeModel
 
-from utility.common import *
-from utility.function_analyzer import *
-from utility.symbol import *
+from vxutility.common import *
+from vxutility.function_analyzer import *
+from vxutility.symbol import *
 
 
 SERVICE_FUNCS = {

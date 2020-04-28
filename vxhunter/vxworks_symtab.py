@@ -1,9 +1,9 @@
 import sys
 sys.path.insert(0, '.')
 
-from utility.common import get_main_memory, auto_analyze, get_memory_blocks, print_err, print_out, get_args
-from utility.symbol import add_symbol, get_symbol, create_symbol_table
-from utility.symbol_table import get_symtab_bounds
+from vxutility.common import get_main_memory, auto_analyze, get_memory_blocks, print_err, print_out, get_args
+from vxutility.symbol import add_symbol, get_symbol, create_symbol_table
+from vxutility.symbol_table import get_symtab_bounds
 
 SYMBOL_KEYS = ['name', 'name_addr', 'dest_addr', 'flag']
 

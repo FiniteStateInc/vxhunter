@@ -6,5 +6,5 @@ setup(name='VxHunter',
       author='Sam Lerner',
       author_email='lerner@finitestate.io',
       url='https://github.com/FiniteStateInc/vxhunter',
-      packages=['vxhunter', 'vxhunter.utility'],
+      packages=['vxhunter', 'vxhunter.vxutility'],
      )
