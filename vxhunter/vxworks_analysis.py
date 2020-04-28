@@ -235,7 +235,11 @@ def get_login_function(func_name, param_idxs, associated_services=[]):
                 continue
 
             param = params[param_idx]
-            param_val = get_string_from_addr(fp.toAddr(param))
+            param_val = maybe_get_string_at(fp.toAddr(param))
+
+            if param_val is None:
+                print_err('%s is None' % param_name)
+                continue
 
             account[param_name] = param_val
 

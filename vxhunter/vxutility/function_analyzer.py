@@ -59,6 +59,10 @@ def get_pcode_value(pcode):
     elif opcode == PcodeOp.COPY or opcode == PcodeOp.CAST:
         return get_varnode_value(pcode.getInput(0))
 
+    elif opcode == PcodeOp.INDIRECT:
+        # TODO: Figure out what exactly the indirect operator means and how to deal with it more precisely
+        return get_varnode_value(pcode.getInput(0))
+
     elif opcode == PcodeOp.LOAD:
         off = get_varnode_value(pcode.getInput(1))
 
