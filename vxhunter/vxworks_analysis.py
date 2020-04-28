@@ -230,8 +230,11 @@ def get_login_function(func_name, param_idxs, associated_services=[]):
         }
 
         for param_name, param_idx in param_idxs.items():
-            if param_idx >= len(params) or params[param_idx] is None:
-                print_err('%s is None or not a valid param index' % param_name)
+            if param_idx >= len(params):
+                print_err('%s is not a valid param index' % param_name)
+
+            if params[param_idx] is None:
+                print_err('%s is None' % param_name)
                 continue
 
             param = params[param_idx]

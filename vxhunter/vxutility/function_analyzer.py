@@ -84,16 +84,17 @@ def get_pcode_value(pcode):
         off = get_varnode_value(pcode.getInput(1))
 
         if off is None:
+            print_err('LOAD source is None')
             return None
 
         addr = fp.toAddr(off)
-        space = pcode.getInput(0).getOffset()
+        space = pcode.getInput(0).offset
 
         # The offset of the space input specifies the address space to load from.
         # Right now, we're only handling loads from RAM
 
         if space == SPACE_RAM:
-            return get_value_from_addr(addr, pcode.getOutput().getSize())
+            return get_value_from_addr(addr, pcode.output.size)
         else:
             print_err('Unhandled load space %d for pcode %s' % (space, pcode))
             return None
@@ -141,6 +142,7 @@ class FunctionAnalyzer(object):
         Get the high-level decompilation for the function to analyze
         '''
         decomp_iface = DecompInterface()
+        decomp_iface.setSimplificationStyle('normalize')
         decomp_iface.openProgram(cp)
 
         decomp_fn = decomp_iface.decompileFunction(self.func, self.timeout, fp.getMonitor())
