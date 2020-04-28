@@ -63,6 +63,21 @@ def get_pcode_value(pcode):
         # TODO: Figure out what exactly the indirect operator means and how to deal with it more precisely
         return get_varnode_value(pcode.getInput(0))
 
+    elif opcode == PcodeOp.MULTIEQUAL:
+        # TODO: Handle multiequal for actual multiple-possible values.
+        #
+        # Currently, this case is just meant to handle when Ghidra produces a Pcode op like:
+        #       v1 = MULTIEQUAL(v1, v1)
+        # for some reason. In this case, it's just the identity.
+        op1 = pcode.getInput(0)
+
+        for i in range(1, pcode.numInputs + 1):
+            if pcode.getInput(i) != op1:
+                print_err('Unhandled multiequal on differing inputs: %s' % pcode)
+                return None
+
+        return get_varnode_value(op1)
+
     elif opcode == PcodeOp.LOAD:
         off = get_varnode_value(pcode.getInput(1))
 
