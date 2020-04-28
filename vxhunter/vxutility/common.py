@@ -11,7 +11,7 @@ from ghidra.util.task import TaskMonitor
 from ghidra.program.flatapi import FlatProgramAPI
 from ghidra.program.model.util import CodeUnitInsertionException
 
-from __main__ import currentProgram, isRunningHeadless, askChoice
+from __main__ import currentProgram, isRunningHeadless, askChoice, getScriptArgs
 
 # Init Ghidra vars
 cp = currentProgram
