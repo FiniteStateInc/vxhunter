@@ -71,7 +71,7 @@ def get_pcode_value(pcode):
         # for some reason. In this case, it's just the identity.
         op1 = pcode.getInput(0)
 
-        for i in range(1, pcode.numInputs + 1):
+        for i in range(1, pcode.numInputs):
             opi = pcode.getInput(i)
 
             if op1.space != opi.space or op1.offset != opi.offset or op1.size != opi.size:
