@@ -39,6 +39,7 @@ def define_symbol_table(vx_ver):
 
     if symtab_bounds is None:
         print_err('Could not find symbol table bounds', script_name)
+        analyzeAll(currentProgram)
         return False
 
     print_out('Symbol table found from %08x to %08x' % symtab_bounds, script_name)
