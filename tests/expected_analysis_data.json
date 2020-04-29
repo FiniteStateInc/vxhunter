@@ -1,0 +1,96 @@
+{
+    "101": {
+        "accounts": [
+            {"origin": "usrBootLineInit", "services": [], "password": "flash(0,0)host:/flash/os.bin e=0.0.0.0:fffff000 h=0.0.0.0 u=netarm pw=netsilicon f=0x08 tn=ns9360 o=", "username": "bootline"}
+        ],
+        "services": [
+            {"version": 6, "enabled": false, "name": "tftpd"},
+            {"version": 6, "enabled": false, "name": "sshd"},
+            {"version": 6, "enabled": true, "name": "wdbDbg"},
+            {"version": 6, "enabled": false, "name": "snmpd"},
+            {"version": 6, "enabled": false, "name": "ftpd"},
+            {"version": 6, "enabled": false, "name": "telnetd"},
+            {"version": 6, "enabled": true, "name": "shell"}
+        ]
+    },
+    "BMECRA31210_Master.bin": {
+        "accounts": [
+            {"origin": "ipcom_auth_useradd", "services": ["ssh"], "password": "pcfactory", "username": "pcfactory"},
+            {"origin": "ipcom_auth_useradd", "services": ["ssh"], "password": "fwdownload", "username": "loader"},
+            {"origin": "ipcom_auth_useradd", "services": ["ssh"], "password": "fwupgrade", "username": "fwupgrade"},
+            {"origin": "usrBootLineInit", "services": [], "password": "stGMac(0,0)host:vxWorks h=198.168.0.45 e=198.168.0.50:ffffff00 u=vxworks pw=cc f=0x0 tn=spear", "username": "bootline"}
+        ],
+        "services": [
+            {"version": 6, "enabled": false, "name": "tftpd"},
+            {"version": 6, "enabled": false, "name": "sshd"},
+            {"version": 6, "enabled": true, "name": "wdbDbg"},
+            {"version": 6, "enabled": false, "name": "snmpd"},
+            {"version": 6, "enabled": false, "name": "ftpd"},
+            {"version": 6, "enabled": false, "name": "telnetd"},
+            {"version": 6, "enabled": false, "name": "shell"}
+        ]
+    },
+    "CRA31200_Com.bin": {
+        "accounts": [
+            {"origin": "ipcom_auth_useradd", "services": ["ssh"], "password": "pcfactory", "username": "pcfactory"},
+            {"origin": "ipcom_auth_useradd", "services": ["ssh"], "password": "fwdownload", "username": "loader"},
+            {"origin": "ipcom_auth_useradd", "services": ["ssh"], "password": "user", "username": "user"},
+            {"origin": "ipcom_auth_useradd", "services": ["ssh"], "password": "fwupgrade", "username": "fwupgrade"},
+            {"origin": "ipcom_auth_useradd", "services": ["ssh"], "password": "sresurdf", "username": "fdrusers"},
+            {"origin": "ipcom_auth_useradd", "services": ["ssh"], "password": "sntp", "username": "sntp"},
+            {"origin": "usrBootLineInit", "services": [], "password": "stGMac(0,0)host:vxWorks h=198.168.0.45 e=198.168.0.50:ffffff00 u=vxworks pw=cc f=0x0 tn=spear", "username": "bootline"}
+        ],
+        "services": [
+            {"version": 6, "enabled": false, "name": "tftpd"},
+            {"version": 6, "enabled": false, "name": "sshd"},
+            {"version": 6, "enabled": true, "name": "wdbDbg"},
+            {"version": 6, "enabled": true, "name": "snmpd"},
+            {"version": 6, "enabled": false, "name": "ftpd"},
+            {"version": 6, "enabled": false, "name": "telnetd"},
+            {"version": 6, "enabled": false, "name": "shell"}
+        ]
+    },
+    "firmware": {
+        "accounts": [],
+        "services": [
+            {"version": 5, "enabled": false, "name": "tftpd"},
+            {"version": 5, "enabled": false, "name": "sshd"},
+            {"version": 5, "enabled": false, "name": "wdbDbg"},
+            {"version": 5, "enabled": false, "name": "snmpd"},
+            {"version": 5, "enabled": false, "name": "ftpd"},
+            {"version": 5, "enabled": false, "name": "telnetd"},
+            {"version": 5, "enabled": false, "name": "shell"}
+        ]
+    },
+    "kernel": {
+        "accounts": [
+            {"origin": "loginUserAdd", "services": ["shell"], "username": "fwupgrade"},
+            {"origin": "loginUserAdd", "services": ["shell"], "password_hash": "bSybeeddeS", "username": "nip2212"},
+            {"origin": "usrBootLineInit", "services": [], "password": "tffs=(0,0)FLASH0:/FLASH0/wwwroot/conf/exec/FBC000.bin h=205.217.193.81 e=205.217.193.83 u=user tn=cirrus f=0x80", "username": "bootline"}
+        ],
+        "services": [
+            {"version": 5, "enabled": false, "name": "tftpd"},
+            {"version": 5, "enabled": false, "name": "sshd"},
+            {"version": 5, "enabled": true, "name": "wdbDbg"},
+            {"version": 5, "enabled": true, "name": "snmpd"},
+            {"version": 5, "enabled": true, "name": "ftpd"},
+            {"version": 5, "enabled": false, "name": "telnetd"},
+            {"version": 5, "enabled": true, "name": "shell"}
+        ]
+    },
+    "tcm_code": {
+        "accounts": [
+            {"origin": "loginUserAdd", "services": ["shell"], "password_hash": "D8k7jQ1q+MqS5iQAsQUNCZzgcxO5cREjSXD86E1AgL4=", "username": "Triconex"},
+            {"origin": "usrBootLineInit", "services": [], "password": "motetsec(1,0)host:vxWorks.st u=target pw=vxTarget f=0x0 tn=TCM2", "username": "bootline"}
+        ],
+        "services": [
+            {"version": 6, "enabled": false, "name": "tftpd"},
+            {"version": 6, "enabled": false, "name": "sshd"},
+            {"version": 6, "enabled": true, "name": "wdbDbg"},
+            {"version": 6, "enabled": false, "name": "snmpd"},
+            {"version": 6, "enabled": false, "name": "ftpd"},
+            {"version": 6, "enabled": false, "name": "telnetd"},
+            {"version": 6, "enabled": false, "name": "shell"}
+        ]
+    }
+}

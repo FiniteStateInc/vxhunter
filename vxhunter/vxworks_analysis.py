@@ -366,30 +366,31 @@ def add_function_xrefs_from_symbol_find():
                                    0)
 
 
-script_name, vx_ver = get_args()
-if script_name is None or vx_ver is None:
-    exit()
+if __name__ == '__main__':
+    script_name, vx_ver = get_args()
+    if script_name is None or vx_ver is None:
+        exit()
 
-# Try to create the bss section by looking for calls to bzero.
-create_bss()
-add_function_xrefs_from_symbol_find()
+    # Try to create the bss section by looking for calls to bzero.
+    create_bss()
+    add_function_xrefs_from_symbol_find()
 
-# Look at VxWorks specific functions to try to improve the analysis report.
-accounts = get_login_accouts()
-bootline = get_bootline()
-services = get_available_services(vx_ver)
+    # Look at VxWorks specific functions to try to improve the analysis report.
+    accounts = get_login_accouts()
+    bootline = get_bootline()
+    services = get_available_services(vx_ver)
 
-if bootline is not None:
-    accounts.append({
-        'username': 'bootline',
-        'password': bootline,
-        'origin': 'usrBootLineInit',
-        'services': []
-    })
+    if bootline is not None:
+        accounts.append({
+            'username': 'bootline',
+            'password': bootline,
+            'origin': 'usrBootLineInit',
+            'services': []
+        })
 
-for account in accounts:
-    print_out('Account: %s' % json.dumps(account), script_name)
+    for account in accounts:
+        print_out('Account: %s' % json.dumps(account), script_name)
 
-for service in services:
-    print_out('Service: %s' % json.dumps(service), script_name)
+    for service in services:
+        print_out('Service: %s' % json.dumps(service), script_name)
 

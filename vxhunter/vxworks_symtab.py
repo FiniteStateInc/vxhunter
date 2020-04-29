@@ -51,10 +51,11 @@ def define_symbol_table(vx_ver):
     return True
 
 
-script_name, vx_ver = get_args()
-if script_name is None or vx_ver is None:
-    exit()
+if __name__ == '__main__':
+    script_name, vx_ver = get_args()
+    if script_name is None or vx_ver is None:
+        exit()
 
-# Try to get the symbol table/define the symbols.
-define_symbol_table(vx_ver)
+    # Try to get the symbol table/define the symbols.
+    define_symbol_table(vx_ver)
 

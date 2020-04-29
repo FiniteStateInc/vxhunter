@@ -110,4 +110,5 @@ venv.bak/
 setup.cfg
 
 .*.swp
-;
+/venv/
+.*.swo
