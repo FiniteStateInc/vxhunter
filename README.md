@@ -18,3 +18,7 @@ To run the analysis tests, first create and activate the virtual environment. To
 Then run `./scripts/run_tests.sh`. This will download a large zipped Ghidra project from s3 into a temporary directory. Therefore, it is recommended that you download this zip once and export the environment variable `VX_ZIP_DIR` to it's parent directory.
 
 This way the ~100Mb zip file doesn't need to be downloaded every time the tests are run.
+
+## Deploying
+
+If you make changes, after making sure the tests still pass, run `pip wheel .`. This will create a wheel of the project that can be installed via pip. If the filename of wheel changes for some reason (maybe you changed the version in `setup.py`), make sure so change the name of the wheel in `requirements.txt` for the firmware analysis container.
