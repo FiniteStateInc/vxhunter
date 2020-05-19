@@ -5,25 +5,80 @@ import json
 from functools import reduce
 
 from ghidra.program.model.symbol import RefType, SourceType
-from ghidra.program.model.data import PointerDataType, CharDataType, VoidDataType
-from ghidra.program.model.listing import ParameterImpl
-from ghidra.program.model.listing.Function import FunctionUpdateType
-from ghidra.program.model.lang import PrototypeModel
 
 from vxutility.common import *
 from vxutility.function_analyzer import *
+from vxutility.function_utils import get_func_addrs_and_set_signatures, cpy_func_signatures, is_func_called
 from vxutility.symbol import *
 
 
 SERVICE_FUNCS = {
-    "wdbDbg": ["wdbDbgArchInit"],
-    "ftpd": ["ftpdInit"],
-    "tftpd": ["tftpdInit"],
-    "snmpd": ["snmpdInit"],
-    "sshd": ["sshdInit"],
-    "shell": ["shellInit"],
-    "telnetd": ["telnetdInit"],
+    'wdbDbg': ['wdbDbgArchInit'],
+    'ftpd': ['ftpdInit'],
+    'tftpd': ['tftpdInit'],
+    'snmpd': ['snmpdInit'],
+    'sshd': ['sshdInit'],
+    'shell': ['shellInit'],
+    'telnetd': ['telnetdInit'],
 }
+
+PROTECTION_FUNCS = {
+    'write_protection': {
+        5: {
+            'virtual_mem_text': ['vmTextProtect'],
+            'vector_table': ['intVecTableWriteProtect']
+        },
+        6: {
+            'virtual_mem_text': ['vmTextProtect'],
+            'vector_table': ['intVecTableWriteProtect'],
+            'kernel_text': ['sysTextProtect'],
+            'user_text': ['usrTextProtect'],
+        }
+    },
+    'user_task_stack_protection': {
+        6: {
+            'no_exec': ['taskStackNoExecEnable'],
+            'guard_zones': ['taskStackGuardPageEnable']
+        }
+    },
+    'password_protection': {
+        6: {
+            'telnet': ['usrSecurity']
+        }
+    }
+}
+
+
+def get_sda_regs():
+    '''
+    Try to get the value of the SDA registers (PowerPC-specific) and set them in the program.
+    '''
+    global script_name
+
+    target_function = get_function('vxSdaInit')
+
+    if not target_function:
+        print_err('Can\'t find vxSdaInit function in firmware', script_name)
+        return
+
+    # Make sure that vxSdaInit is called
+    calls = get_all_calls_to_addr(target_function.getEntryPoint())
+
+    if len(calls) == 0:
+        print_err('Can\'t find any calls to vxSdaInit')
+        return
+
+    #min_call_addr = min(calls.keys())
+    sda_reg_vals = emulate_func(target_function, ['r2', 'r13'])
+
+    #next_insn_addr = fp.getInstructionAfter(min_call_addr).address
+    min_addr = get_main_memory().start
+    max_addr = get_main_memory().end
+    prog_ctx = cp.programContext
+
+    for reg, val in sda_reg_vals.items():
+        print('Setting %s to %x starting at %s' % (reg.name, val, min_addr))
+        prog_ctx.setValue(reg, min_addr, max_addr, long(val))
 
 
 def create_bss():
@@ -43,12 +98,7 @@ def create_bss():
     calls = get_all_calls_to_addr(target_function.getEntryPoint(), 
                                   search_funcs=['sysStart', 'usrInit'])
 
-    for call_addr, call_data in calls.items():
-        if not 'params' in call_data:
-            continue
-
-        params = call_data['params']
-
+    for call_addr, params in calls.items():
         # bzero takes an address and size.
         if len(params) != 2: 
             continue
@@ -116,28 +166,65 @@ def create_bss():
         break
 
 
-def maybe_set_function_signature(func, correct_args, correct_retval):
-    siggie = func.signature
-    calling_conv = func.callingConvention
+def add_function_xrefs_from_symbol_find():
+    '''
+    Sometimes, a function will be referenced in code by:
 
-    if calling_conv is None:
-        func_man = cp.functionManager
-        calling_conv = func_man.defaultCallingConvention
+        symFindByName(..., function name, ...)
 
-    args = [arg.dataType for arg in siggie.arguments]
-    retval = siggie.returnType
+    In which case, we want to add an xref to that function since it is an indirect
+    reference Ghidra won't pick up on.
+    '''
+    global script_name
 
-    if args != [arg['dt'] for arg in correct_args]:
-        new_params = []
+    target_function = get_function("symFindByName")
 
-        for i, arg in enumerate(correct_args):
-            arg_loc = calling_conv.getNextArgLocation(new_params, arg['dt'], cp)
-            new_params.append(ParameterImpl(arg['name'], arg['dt'], arg_loc, cp, SourceType.USER_DEFINED))
+    if not target_function:
+        print_err("Can't find symFindByName function in firmware", script_name)
+        return
 
-        func.replaceParameters(new_params, FunctionUpdateType.CUSTOM_STORAGE, True, SourceType.USER_DEFINED)
+    calls = get_all_calls_to_addr(call_address=target_function.entryPoint)
 
-    if retval != correct_retval:
-        func.setReturnType(correct_retval, SourceType.USER_DEFINED)
+    print_out("Found %d symFindByName call" % len(calls), script_name)
+
+    ref_man = cp.getReferenceManager()
+
+    for call_addr, params in calls.items():
+        # symFindByName takes a table ID, symbol name, value pointer, and a symbol type pointer
+        if len(params) != 4:
+            continue
+
+        name_ptr = params[1]
+
+        if name_ptr is None:
+            continue
+
+        # Only count symbols where we have a valid name.
+        name_data = getDataAt(toAddr(name_ptr))
+
+        if name_data is None or (not name_data.hasStringValue()): 
+            continue
+
+        name = str(name_data.getValue())
+
+        # We only care about when the firmware is searching for a function
+        to_function = get_function(name, None)
+
+        if not to_function:
+            print_out("Symbol %s is not a function" % name, script_name)
+            continue
+
+        # Add a reference to the function since Ghidra will not find this
+        # out of the box.
+
+        ref_to = to_function.getEntryPoint()
+        ref_from = call_addr
+
+        ref_man.addMemoryReference(ref_from, 
+                                   ref_to, 
+                                   RefType.READ,
+                                   SourceType.USER_DEFINED, 
+                                   0)
 
 
 def get_bootline():
@@ -155,34 +242,7 @@ def get_bootline():
         return None
 
     # Get the address for the two functions we have seen to copy the bootline.
-    char_dt = CharDataType()
-    void_dt = VoidDataType()
-
-    char_ptr_dt = PointerDataType(char_dt)
-    void_ptr_dt = PointerDataType(void_dt)
-
-    cpy_funcs = {
-        'memcpy': {
-            'args': [{ 'dt': void_ptr_dt, 'name': 'dst' }, { 'dt': void_ptr_dt, 'name': 'src' }],
-            'retval': void_ptr_dt
-        },
-        'strcpy': {
-            'args': [{ 'dt': char_ptr_dt, 'name': 'dst' }, { 'dt': char_ptr_dt, 'name': 'src' }],
-            'retval': char_ptr_dt
-        }
-    }
-
-    cpy_func_addrs = []
-
-    for cpy_func_name, cpy_func_siggie in cpy_funcs.items():
-        cpy_func = get_function(cpy_func_name)
-
-        if cpy_func is None:
-            print_err('Can\'t find %s' % cpy_func_name, script_name)
-            continue
-
-        maybe_set_function_signature(cpy_func, cpy_func_siggie['args'], cpy_func_siggie['retval'])
-        cpy_func_addrs.append(cpy_func.getEntryPoint())
+    cpy_func_addrs = get_func_addrs_and_set_signatures(cpy_func_signatures, script_name=script_name)
 
     # Get the value of the second parameter to the last copy function
     # called from usrBootLineInit.
@@ -214,12 +274,7 @@ def get_login_function(func_name, param_idxs, associated_services=[]):
     # Get all calls to the login function.
     calls = get_all_calls_to_addr(target_function.getEntryPoint())
 
-    for call_addr, call_data in calls.items():
-        if not 'params' in call_data:
-            continue
-
-        params = call_data['params']
-
+    for call_addr, params in calls.items():
         # Make sure we at least were able to get the value of the username and password params.
         if len(params) < min_num_params: 
             continue
@@ -277,7 +332,7 @@ def get_available_services(vx_ver):
     '''
     Use known function names to determine if services such as telnet, ftp, and wdbg are enabled.
 
-    TODO: Actually check whether or not these functions are called (and not later disabled).
+    TODO: Make sure that the service isn't disabled after being enabled.
     '''
     services = []
 
@@ -289,10 +344,10 @@ def get_available_services(vx_ver):
         }
 
         for func in funcs:
-            target_function = get_function(func)
+            service['enabled'] = is_func_called(func)
 
-            if target_function: 
-                service['enabled'] = True
+            # If one of the functions was called, chalk it up as a win and move on
+            if service['enabled']:
                 break
 
         services.append(service)
@@ -300,70 +355,29 @@ def get_available_services(vx_ver):
     return services
 
 
-def add_function_xrefs_from_symbol_find():
+def get_protections(vx_ver):
     '''
-    Sometimes, a function will be referenced in code by:
-
-        symFindByName(..., function name, ...)
-
-    In which case, we want to add an xref to that function since it is an indirect
-    reference Ghidra won't pick up on.
+    Get the memory protections (NX stack, W^X, etc.) used in the binary.
     '''
-    global script_name
+    protections = {}
 
-    target_function = get_function("symFindByName")
-
-    if not target_function:
-        print_err("Can't find symFindByName function in firmware", script_name)
-        return
-
-    calls = get_all_calls_to_addr(call_address=target_function.getEntryPoint())
-
-    print_out("Found %d symFindByName call" % len(calls), script_name)
-
-    ref_man = cp.getReferenceManager()
-
-    for call_addr, call_info in calls.items():
-        if not 'params' in call_info:
+    for prot_category_name, all_prot_funcs in PROTECTION_FUNCS.items():
+        if vx_ver not in all_prot_funcs:
             continue
 
-        params = call_info['params']
+        prots = {}
 
-        # symFindByName takes a table ID, symbol name, value pointer, and a symbol type pointer
-        if len(params) != 4:
-            continue
+        for prot_name, prot_funcs in all_prot_funcs[vx_ver].items():
+            for func in prot_funcs:
+                prots[prot_name] = is_func_called(func)
 
-        name_ptr = params[1]
+                # Like in the services, break if one of the functions is called
+                if prots[prot_name]:
+                    break
 
-        if name_ptr is None:
-            continue
+        protections[prot_category_name] = prots
 
-        # Only count symbols where we have a valid name.
-        name_data = getDataAt(toAddr(name_ptr))
-
-        if name_data is None or (not name_data.hasStringValue()): 
-            continue
-
-        name = str(name_data.getValue())
-
-        # We only care about when the firmware is searching for a function
-        to_function = get_function(name, None)
-
-        if not to_function:
-            print_out("Symbol %s is not a function" % name, script_name)
-            continue
-
-        # Add a reference to the function since Ghidra will not find this
-        # out of the box.
-
-        ref_to = to_function.getEntryPoint()
-        ref_from = call_addr
-
-        ref_man.addMemoryReference(ref_from, 
-                                   ref_to, 
-                                   RefType.READ,
-                                   SourceType.USER_DEFINED, 
-                                   0)
+    return protections
 
 
 if __name__ == '__main__':
@@ -371,7 +385,8 @@ if __name__ == '__main__':
     if script_name is None or vx_ver is None:
         exit()
 
-    # Try to create the bss section by looking for calls to bzero.
+    # Try to enrich the database by adding x-refs, mapping memory, etc.
+    get_sda_regs()
     create_bss()
     add_function_xrefs_from_symbol_find()
 
@@ -379,6 +394,7 @@ if __name__ == '__main__':
     accounts = get_login_accouts()
     bootline = get_bootline()
     services = get_available_services(vx_ver)
+    protections = get_protections(vx_ver)
 
     if bootline is not None:
         accounts.append({
@@ -393,4 +409,8 @@ if __name__ == '__main__':
 
     for service in services:
         print_out('Service: %s' % json.dumps(service), script_name)
+
+    # It's kind of gross, but since the protections aren't treated as an array, but a dictionary,
+    # we print out one long line of json since we don't have the data model currently for these protections.
+    print_out('Protections: %s' % json.dumps(protections), script_name)
 

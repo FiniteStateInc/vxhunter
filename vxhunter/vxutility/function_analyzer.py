@@ -1,18 +1,30 @@
 from ghidra.app.decompiler import DecompInterface, DecompileOptions, DecompileResults
-from ghidra.program.model.pcode import HighParam, PcodeOp, PcodeOpAST
+from ghidra.program.model.pcode import HighParam, PcodeOp, PcodeOpAST, VarnodeTranslator
 from ghidra.program.model.address import GenericAddress
 from ghidra.program.database.code import DataDB
 
 from common import print_err, cp, fp, is_address_in_current_program, get_value_from_addr, get_value, pack
 
 
-BINARY_PCODE_OPS = [PcodeOp.INT_ADD, PcodeOp.PTRSUB, PcodeOp.INT_SUB, PcodeOp.INT_MULT]
+BINARY_PCODE_OPS = {
+    PcodeOp.INT_ADD: '+', 
+    PcodeOp.PTRSUB: '+', 
+    PcodeOp.INT_SUB: '-', 
+    PcodeOp.INT_MULT: '*',
+    PcodeOp.INT_LEFT: '<<',
+    PcodeOp.INT_OR: '|'
+}
+
+varnode_spaces = {
+    'register': {},
+    'unique': {}
+}
 
 decompile_func_cache = {}
 space_ram = None
 
 
-def get_pcode_value(pcode):
+def get_pcode_value(pcode, emulate=False):
     '''
     Get the value of a pcode operation. Will recursively call `get_varnode_value` on the
     operation's operands.
@@ -27,25 +39,18 @@ def get_pcode_value(pcode):
     opcode = pcode.getOpcode()
 
     if opcode in BINARY_PCODE_OPS:
-        op1 = get_varnode_value(pcode.getInput(0))
-        op2 = get_varnode_value(pcode.getInput(1))
+        op1 = get_varnode_value(pcode.getInput(0), emulate)
+        op2 = get_varnode_value(pcode.getInput(1), emulate)
 
         if op1 is None or op2 is None:
             return None
 
-        if opcode == PcodeOp.INT_ADD or opcode == PcodeOp.PTRSUB:
-            return op1 + op2
-
-        elif opcode == PcodeOp.INT_MULT:
-            return op1 * op2
-
-        elif opcode == PcodeOp.INT_SUB:
-            return op1 - op2
+        return eval('%d %s %d' % (op1, BINARY_PCODE_OPS[opcode], op2))
 
     elif opcode == PcodeOp.PTRADD:
-        op1 = get_varnode_value(pcode.getInput(0))
-        op2 = get_varnode_value(pcode.getInput(1))
-        op3 = get_varnode_value(pcode.getInput(2))
+        op1 = get_varnode_value(pcode.getInput(0), emulate)
+        op2 = get_varnode_value(pcode.getInput(1), emulate)
+        op3 = get_varnode_value(pcode.getInput(2), emulate)
 
         if op1 is None or op2 is None or op3 is None:
             return None
@@ -53,7 +58,7 @@ def get_pcode_value(pcode):
         return op1 + op2 * op3
 
     elif opcode == PcodeOp.INT_2COMP:
-        op = get_varnode_value(pcode.getInput(0))
+        op = get_varnode_value(pcode.getInput(0), emulate)
 
         if op is None:
             return None
@@ -61,11 +66,11 @@ def get_pcode_value(pcode):
         return -op
 
     elif opcode == PcodeOp.COPY or opcode == PcodeOp.CAST:
-        return get_varnode_value(pcode.getInput(0))
+        return get_varnode_value(pcode.getInput(0), emulate)
 
     elif opcode == PcodeOp.INDIRECT:
         # TODO: Figure out what exactly the indirect operator means and how to deal with it more precisely
-        return get_varnode_value(pcode.getInput(0))
+        return get_varnode_value(pcode.getInput(0), emulate)
 
     elif opcode == PcodeOp.MULTIEQUAL:
         # TODO: Handle multiequal for actual multiple-possible values.
@@ -82,10 +87,10 @@ def get_pcode_value(pcode):
                 print_err('Unhandled multiequal on differing inputs: %s' % pcode)
                 return None
 
-        return get_varnode_value(op1)
+        return get_varnode_value(op1, emulate)
 
     elif opcode == PcodeOp.LOAD:
-        off = get_varnode_value(pcode.getInput(1))
+        off = get_varnode_value(pcode.getInput(1), emulate)
 
         if off is None:
             return None
@@ -106,7 +111,7 @@ def get_pcode_value(pcode):
     return None
 
 
-def get_varnode_value(varnode):
+def get_varnode_value(varnode, emulate=False):
     '''
     Get the value of a varnode. Will traverse definitions until a constant is found
     '''
@@ -123,19 +128,41 @@ def get_varnode_value(varnode):
     if space_ram is None and space == 'ram':
         space_ram = varnode.space
 
+    if space in varnode_spaces and off in varnode_spaces[space]:
+        return varnode_spaces[space][off]
+
+    value = None
+
     # If the parameter is a valid address, then get the bytes in memory at that address.
     if varnode.isAddress() and space == 'ram' and is_address_in_current_program(addr):
-        return get_value_from_addr(addr, varnode.size)
+        value = get_value_from_addr(addr, varnode.size)
 
     # Or it could a const pointer in which the offset itself is the pointer
     elif space == 'const':
         size = varnode.size
-        return get_value(pack(off, size=size), signed=True)
+        value = get_value(pack(off, size=size), signed=True)
 
     # Otherwise, recursively backtrack from the definition of this varnode.
     else:
         defn = varnode.getDef()
-        return get_pcode_value(defn)
+        value = get_pcode_value(defn, emulate)
+
+    if value is not None and emulate:
+        set_varnode_value(varnode, value)
+
+    return value
+
+
+def set_varnode_value(varnode, value):
+    space = varnode.getAddress().addressSpace.name
+    
+    if space in varnode_spaces:
+        varnode_spaces[space][varnode.offset] = value
+
+
+def clear_varnodes():
+    for space in varnode_spaces.keys():
+        varnode_spaces[space] = {}
 
 
 class FunctionAnalyzer(object):
@@ -246,7 +273,6 @@ def get_all_calls_to_addr(call_address, search_funcs=None):
     target_references = fp.getReferencesTo(target_func.getEntryPoint())
 
     for target_reference in target_references:
-
         # We only care about calls to the target func
         reference_type = target_reference.getReferenceType()
         if not reference_type.isCall():
@@ -271,17 +297,12 @@ def get_all_calls_to_addr(call_address, search_funcs=None):
             func_analyzer = FunctionAnalyzer(func)
             decompile_func_cache[func_addr] = func_analyzer
 
-        call_data = {
-            'func_addr': func.getEntryPoint(),
-            'func_name': func.name,
-        }
-
         # Try to get the parameters to this call
-        params_value = func_analyzer.get_param_values(call_addr)
-        if params_value:
-            call_data['params'] = params_value
+        params = func_analyzer.get_param_values(call_addr)
+        if params is None:
+            continue
 
-        params_data[call_addr] = call_data
+        params_data[call_addr] = params
 
     return params_data
 
@@ -327,4 +348,48 @@ def get_calls_in_func(func, target_func_addrs=None):
         call_params[target_func_addr] = params
 
     return call_params
+
+
+def emulate_func(func, reg_names):
+    '''
+    Emulate the pcode of a function to get the values of certain registers.
+    '''
+    reg_vals = {}
+    regs = {}
+
+    for reg_name in reg_names:
+        regs[reg_name] = cp.language.getRegister(reg_name)
+
+    insn = fp.getInstructionAt(func.getEntryPoint())
+
+    # Iterate over all instructions of the function
+    while insn is not None and fp.getFunctionContaining(insn.address) == func:
+
+        # Iterate over all pcode of the instruction
+        for pc in insn.pcode:
+
+            # Try to get the output value of the operation
+            val = get_pcode_value(pc, True)
+            out_vnode = pc.output
+
+            # If we were successful, store that value in case it's accessed by a later operation
+            if out_vnode is not None and val is not None:
+                set_varnode_value(out_vnode, val)
+
+        insn = insn.next
+
+    # Check if we now know the value of our target registers
+    translator = VarnodeTranslator(cp)
+    reg_space = varnode_spaces['register']
+
+    for reg_name, reg in regs.items():
+        reg_off = translator.getVarnode(reg).offset
+
+        if reg_off in reg_space:
+            reg_vals[reg] = reg_space[reg_off]
+
+    # Clear any temporary varnodes we stored so we don't corrupt later results
+    clear_varnodes()
+
+    return reg_vals
 

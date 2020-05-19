@@ -50,6 +50,14 @@ def check_vx_analysis(prj_dir, prj_name, fname, plugin_name, vx_ver, expected_re
     prefix = '%s: Service: ' % plugin_name
     services = [json.loads(line[len(prefix):]) for line in lines if line.startswith(prefix)]
 
+    prefix = '%s: Protections: ' % plugin_name
+    protections = [json.loads(line[len(prefix):]) for line in lines if line.startswith(prefix)]
+    
+    if len(protections) > 0:
+        protections = protections[0]
+    else:
+        protections = None
+
     if accounts != expected_results['accounts']:
         print('*' * 50)
         print(('*' * 15) + ' FAIL ' + ('*' * 15))

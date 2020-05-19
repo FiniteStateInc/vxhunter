@@ -10,7 +10,7 @@
             {"version": 6, "enabled": false, "name": "snmpd"},
             {"version": 6, "enabled": false, "name": "ftpd"},
             {"version": 6, "enabled": false, "name": "telnetd"},
-            {"version": 6, "enabled": true, "name": "shell"}
+            {"version": 6, "enabled": false, "name": "shell"}
         ]
     },
     "BMECRA31210_Master.bin": {
