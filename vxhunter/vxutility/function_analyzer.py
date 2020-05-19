@@ -234,15 +234,15 @@ class FunctionAnalyzer(object):
 
         return None
 
-    def get_param_values(self, call_address):
+    def get_param_values(self, call_addr):
         '''
         Get the address and pointed to value for every call.
         If a parameter is not an address, the value is the parameter itself.
         '''
-        if not call_address in self.call_pcodes:
+        if not call_addr in self.call_pcodes:
             return None
 
-        pcode = self.call_pcodes[call_address]
+        pcode = self.call_pcodes[call_addr]
         params = pcode.getInputs()[1:]
 
         return [get_varnode_value(param) for param in params]
@@ -259,27 +259,42 @@ class FunctionAnalyzer(object):
         return param_vals
 
 
-def get_all_calls_to_addr(call_address, search_funcs=None):
+def get_all_calls_to_addr(func_addr, ret_all_refs=False):
+    call_addrs = []
+
+    target_references = fp.getReferencesTo(func_addr)
+
+    # Sometimes, a function will be referenced as a pointer in a parent function so the reference
+    # type won't be a call. If you pass ret_all_refs=True, you'll probably want to check that the
+    # referencing address is in a function and not the symbol.
+    if ret_all_refs:
+        return [ref.fromAddress for ref in target_references]
+
+    for target_reference in target_references:
+        # We only care about calls to the target func
+        reference_type = target_reference.getReferenceType()
+
+        if reference_type.isCall():
+            call_addrs.append(target_reference.fromAddress)
+
+    return call_addrs
+
+
+def get_all_params_passed_to_func(func_addr, search_funcs=None):
     '''
-    Return the functions that call the function at `call_address` along with the
+    Return the functions that call the function at `call_addr` along with the
     parameters passed.
     '''
-    target_func = fp.getFunctionAt(call_address)
+    target_func = fp.getFunctionAt(func_addr)
     params_data = {}
 
     if not target_func:
         return params_data
 
-    target_references = fp.getReferencesTo(target_func.getEntryPoint())
+    call_addrs = get_all_calls_to_addr(func_addr)
 
-    for target_reference in target_references:
-        # We only care about calls to the target func
-        reference_type = target_reference.getReferenceType()
-        if not reference_type.isCall():
-            continue
-
-        call_addr = target_reference.getFromAddress()
-
+    for call_addr in call_addrs:
+        # We only care about calls within functions
         func = fp.getFunctionContaining(call_addr)
         if not func:
             continue
@@ -288,14 +303,14 @@ def get_all_calls_to_addr(call_address, search_funcs=None):
         if search_funcs and func.name.strip('_') not in search_funcs:
             continue
 
-        func_addr = func.getEntryPoint()
+        calling_func_addr = func.getEntryPoint()
 
         # Get the func analyzer from the cache or create one
-        if func_addr in decompile_func_cache:
-            func_analyzer = decompile_func_cache[func_addr]
+        if calling_func_addr in decompile_func_cache:
+            func_analyzer = decompile_func_cache[calling_func_addr]
         else:
             func_analyzer = FunctionAnalyzer(func)
-            decompile_func_cache[func_addr] = func_analyzer
+            decompile_func_cache[calling_func_addr] = func_analyzer
 
         # Try to get the parameters to this call
         params = func_analyzer.get_param_values(call_addr)

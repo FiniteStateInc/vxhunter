@@ -82,15 +82,55 @@ def get_func_addrs_and_set_signatures(func_sigs, script_name=None):
     return funcs
 
 
-def is_func_called(func_name):
+def is_func_called_from_a_root(func_name, roots, depth=0, visited_func_addrs=[], max_depth=10, orig_func=None):
     '''
-    Return whether or not a function is called.
+    Return whether or not a function is called from one of the root functions specified
     '''
+    if orig_func is None:
+        #print_err(func_name)
+        orig_func = func_name
+    else:
+        #print_err('%s -> %s, %d' % (orig_func, func_name, depth))
+        pass
+
     func = get_function(func_name)
 
     # You can't call a function that doesn't exist!
     if func is None:
         return False
 
-    calls = get_all_calls_to_addr(call_address=func.entryPoint)
-    return len(calls) > 0
+    func_addr = func.entryPoint
+
+    # Make sure we don't traverse any cycles in the call graph
+    visited_func_addrs.append(func_addr)
+
+    # Check to make sure we're not too deep. No one likes a stack overflow
+    depth += 1
+
+    if depth >= max_depth:
+        return False
+
+    # Get the calls to the current node
+    call_addrs = get_all_calls_to_addr(func_addr, ret_all_refs=True)
+
+    for call_addr in call_addrs:
+        # Assert that the reference is in a function
+        calling_func = fp.getFunctionContaining(call_addr)
+
+        if calling_func is None:
+            continue
+
+        # Exit early if a calling function is in the roots
+        if calling_func.name.strip('_') in roots:
+            return True
+
+        # Don't try to recurse on a previously visited node, we'll probably overflow the stack if we do
+        if call_addr in visited_func_addrs:
+            continue
+
+        # Recurse if it isn't (basically DFS on the call graph)
+        if is_func_called_from_a_root(calling_func.name, roots, depth, visited_func_addrs, 10, orig_func):
+            return True
+
+    # Alas, the function was not called
+    return False

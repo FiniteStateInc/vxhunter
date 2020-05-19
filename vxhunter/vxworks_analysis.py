@@ -8,7 +8,7 @@ from ghidra.program.model.symbol import RefType, SourceType
 
 from vxutility.common import *
 from vxutility.function_analyzer import *
-from vxutility.function_utils import get_func_addrs_and_set_signatures, cpy_func_signatures, is_func_called
+from vxutility.function_utils import get_func_addrs_and_set_signatures, cpy_func_signatures, is_func_called_from_a_root
 from vxutility.symbol import *
 
 
@@ -18,7 +18,7 @@ SERVICE_FUNCS = {
     'tftpd': ['tftpdInit'],
     'snmpd': ['snmpdInit'],
     'sshd': ['sshdInit'],
-    'shell': ['shellInit'],
+    'shell': ['shellInit', 'usrShellInit'],
     'telnetd': ['telnetdInit'],
 }
 
@@ -31,8 +31,12 @@ PROTECTION_FUNCS = {
         6: {
             'virtual_mem_text': ['vmTextProtect'],
             'vector_table': ['intVecTableWriteProtect'],
-            'kernel_text': ['sysTextProtect'],
             'user_text': ['usrTextProtect'],
+        }
+    },
+    'interrupt_stack_protection': {
+        6: {
+            'guard_zones': ['usrKernelIntStkProtect']
         }
     },
     'user_task_stack_protection': {
@@ -48,6 +52,8 @@ PROTECTION_FUNCS = {
     }
 }
 
+ROOTS = ['usrRoot', 'usrKernelInit', 'usrInit', 'sysInit', 'sysStart']
+
 
 def get_sda_regs():
     '''
@@ -62,7 +68,7 @@ def get_sda_regs():
         return
 
     # Make sure that vxSdaInit is called
-    calls = get_all_calls_to_addr(target_function.getEntryPoint())
+    calls = get_all_params_passed_to_func(target_function.getEntryPoint())
 
     if len(calls) == 0:
         print_err('Can\'t find any calls to vxSdaInit')
@@ -95,7 +101,7 @@ def create_bss():
         return
 
     # Get the parameters of all calls to bzero in sysStart and usrInit.
-    calls = get_all_calls_to_addr(target_function.getEntryPoint(), 
+    calls = get_all_params_passed_to_func(target_function.getEntryPoint(), 
                                   search_funcs=['sysStart', 'usrInit'])
 
     for call_addr, params in calls.items():
@@ -183,7 +189,7 @@ def add_function_xrefs_from_symbol_find():
         print_err("Can't find symFindByName function in firmware", script_name)
         return
 
-    calls = get_all_calls_to_addr(call_address=target_function.entryPoint)
+    calls = get_all_params_passed_to_func(target_function.entryPoint)
 
     print_out("Found %d symFindByName call" % len(calls), script_name)
 
@@ -259,30 +265,27 @@ def get_bootline():
     return None
 
 
-def get_login_function(func_name, param_idxs, associated_services=[]):
+def get_function_params(func_name, param_idxs):
     global script_name
 
-    accounts = []
+    objs = []
 
     target_function = get_function(func_name)
     min_num_params = max(param_idxs.values()) + 1
 
     if target_function is None:
         print_err('Can\'t find function %s' % func_name, script_name)
-        return accounts
+        return objs
 
     # Get all calls to the login function.
-    calls = get_all_calls_to_addr(target_function.getEntryPoint())
+    calls = get_all_params_passed_to_func(target_function.getEntryPoint())
 
     for call_addr, params in calls.items():
         # Make sure we at least were able to get the value of the username and password params.
         if len(params) < min_num_params: 
             continue
 
-        account = { 
-            'services': associated_services,
-            'origin': func_name
-        }
+        obj = {}
 
         for param_name, param_idx in param_idxs.items():
             if param_idx >= len(params):
@@ -299,9 +302,21 @@ def get_login_function(func_name, param_idxs, associated_services=[]):
                 print_err('%s is None' % param_name)
                 continue
 
-            account[param_name] = param_val
+            obj[param_name] = param_val
 
-        accounts.append(account)
+        objs.append(obj)
+
+    return objs
+
+
+def get_login_function(func_name, param_idxs, associated_services=[]):
+    accounts = get_function_params(func_name, param_idxs)
+
+    for account in accounts:
+        account.update({ 
+            'services': associated_services,
+            'origin': func_name
+        })
 
     return accounts
 
@@ -343,8 +358,11 @@ def get_available_services(vx_ver):
             'enabled': False
         }
 
+        # Prefix all of the functions with underscores just in case
+        funcs.extend(['_' + func for func in funcs])
+
         for func in funcs:
-            service['enabled'] = is_func_called(func)
+            service['enabled'] = is_func_called_from_a_root(func, ROOTS)
 
             # If one of the functions was called, chalk it up as a win and move on
             if service['enabled']:
@@ -368,14 +386,59 @@ def get_protections(vx_ver):
         prots = {}
 
         for prot_name, prot_funcs in all_prot_funcs[vx_ver].items():
+            # Prefix all of the functions with underscores just in case
+            prot_funcs.extend(['_' + func for func in prot_funcs])
+
             for func in prot_funcs:
-                prots[prot_name] = is_func_called(func)
+                prots[prot_name] = is_func_called_from_a_root(func, ROOTS)
 
                 # Like in the services, break if one of the functions is called
                 if prots[prot_name]:
                     break
 
         protections[prot_category_name] = prots
+
+    # TODO: Figure out a data model for protections so that non-functions don't have to be treated separately
+
+    # See if the global variable `sysTextProtect` is 1
+    kprotect_sym = get_symbol('sysTextProtect')
+
+    if kprotect_sym is not None:
+        write_prot_name = 'write_protection'
+        if not write_prot_name in protections:
+            protections[write_prot_name] = {}
+
+        protections[write_prot_name]['kernel_text'] = get_value_from_addr(kprotect_sym.address, word_size) == 1
+
+    # See if the global variable `globalNoStackFill` is 0
+    nostackfill_sym = get_symbol('globalNoStackFill')
+    global_stack_fill = False
+
+    # If the symbol doesn't exist, try getting the parameter passed to usrKernelInit which
+    # should have the same meaning.
+    if nostackfill_sym is None:
+        stackfill_params = get_function_params('usrKernelInit', {'stackfill': 0})
+
+        # For now, assume that every call to usrKernelInit should pass 0.
+        if len(stackfill_params) > 0:
+            global_stack_fill = sum([p['stackfill'] for p in stackfill_params if 'stackfill' in p]) == 0
+    else:
+        global_stack_fill = get_value_from_addr(nostackfill_sym.address, word_size) == 0
+
+    # Get the number of calls to the checkStack function
+    check_stack_func = get_function('checkStack')
+    num_check_stacks = 0
+
+    if check_stack_func is not None:
+        num_check_stacks = len(get_all_calls_to_addr(check_stack_func.entryPoint))
+    
+    # Since both VxWorks 5 and 6 have stack fill/checkStack, we want to set them no matter if we found them
+    write_prot_name = 'user_task_stack_protection'
+    if not write_prot_name in protections:
+        protections[write_prot_name] = {}
+
+    protections[write_prot_name]['global_stack_fill'] = global_stack_fill
+    protections[write_prot_name]['check_stack_xrefs'] = num_check_stacks
 
     return protections
 

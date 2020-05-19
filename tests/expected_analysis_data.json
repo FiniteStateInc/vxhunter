@@ -6,12 +6,32 @@
         "services": [
             {"version": 6, "enabled": false, "name": "tftpd"},
             {"version": 6, "enabled": false, "name": "sshd"},
-            {"version": 6, "enabled": true, "name": "wdbDbg"},
+            {"version": 6, "enabled": false, "name": "wdbDbg"},
             {"version": 6, "enabled": false, "name": "snmpd"},
             {"version": 6, "enabled": false, "name": "ftpd"},
             {"version": 6, "enabled": false, "name": "telnetd"},
             {"version": 6, "enabled": false, "name": "shell"}
-        ]
+        ],
+        "protections": {
+            "password_protection": {
+                "telnet": false
+            },
+            "user_task_stack_protection": {
+                "global_stack_fill": false,
+                "no_exec": false,
+                "guard_zones": false,
+                "check_stack_xrefs": 1
+            },
+            "write_protection": {
+                "vector_table": false,
+                "kernel_text": false,
+                "virtual_mem_text": false,
+                "user_text": false
+            },
+            "interrupt_stack_protection": {
+                "guard_zones": false
+            }
+        }
     },
     "BMECRA31210_Master.bin": {
         "accounts": [
@@ -27,8 +47,28 @@
             {"version": 6, "enabled": false, "name": "snmpd"},
             {"version": 6, "enabled": false, "name": "ftpd"},
             {"version": 6, "enabled": false, "name": "telnetd"},
-            {"version": 6, "enabled": false, "name": "shell"}
-        ]
+            {"version": 6, "enabled": true, "name": "shell"}
+        ],
+        "protections": {
+            "password_protection": {
+                "telnet": false
+            },
+            "user_task_stack_protection": {
+                "global_stack_fill": true,
+                "no_exec": false,
+                "guard_zones": false,
+                "check_stack_xrefs": 0
+            },
+            "write_protection": {
+                "vector_table": true,
+                "kernel_text": true,
+                "virtual_mem_text": true,
+                "user_text": true
+            },
+            "interrupt_stack_protection": {
+                "guard_zones": false
+            }
+        }
     },
     "CRA31200_Com.bin": {
         "accounts": [
@@ -47,8 +87,28 @@
             {"version": 6, "enabled": true, "name": "snmpd"},
             {"version": 6, "enabled": false, "name": "ftpd"},
             {"version": 6, "enabled": false, "name": "telnetd"},
-            {"version": 6, "enabled": false, "name": "shell"}
-        ]
+            {"version": 6, "enabled": true, "name": "shell"}
+        ],
+        "protections": {
+            "password_protection": {
+                "telnet": false
+            },
+            "user_task_stack_protection": {
+                "global_stack_fill": true,
+                "no_exec": false,
+                "guard_zones": false,
+                "check_stack_xrefs": 0
+            },
+            "write_protection": {
+                "vector_table": true,
+                "kernel_text": true,
+                "virtual_mem_text": true,
+                "user_text": true
+            },
+            "interrupt_stack_protection": {
+                "guard_zones": false
+            }
+        }
     },
     "firmware": {
         "accounts": [],
@@ -60,7 +120,17 @@
             {"version": 5, "enabled": false, "name": "ftpd"},
             {"version": 5, "enabled": false, "name": "telnetd"},
             {"version": 5, "enabled": false, "name": "shell"}
-        ]
+        ],
+        "protections": {
+            "user_task_stack_protection": {
+                "global_stack_fill": false,
+                "check_stack_xrefs": 0
+            },
+            "write_protection": {
+                "vector_table": false,
+                "virtual_mem_text": false
+            }
+        }
     },
     "kernel": {
         "accounts": [
@@ -71,12 +141,22 @@
         "services": [
             {"version": 5, "enabled": false, "name": "tftpd"},
             {"version": 5, "enabled": false, "name": "sshd"},
-            {"version": 5, "enabled": true, "name": "wdbDbg"},
+            {"version": 5, "enabled": false, "name": "wdbDbg"},
             {"version": 5, "enabled": true, "name": "snmpd"},
             {"version": 5, "enabled": true, "name": "ftpd"},
             {"version": 5, "enabled": false, "name": "telnetd"},
             {"version": 5, "enabled": true, "name": "shell"}
-        ]
+        ],
+        "protections": {
+            "user_task_stack_protection": {
+                "global_stack_fill": false,
+                "check_stack_xrefs": 0
+            },
+            "write_protection": {
+                "vector_table": false,
+                "virtual_mem_text": false
+            }
+        }
     },
     "tcm_code": {
         "accounts": [
@@ -90,7 +170,27 @@
             {"version": 6, "enabled": false, "name": "snmpd"},
             {"version": 6, "enabled": false, "name": "ftpd"},
             {"version": 6, "enabled": false, "name": "telnetd"},
-            {"version": 6, "enabled": false, "name": "shell"}
-        ]
+            {"version": 6, "enabled": true, "name": "shell"}
+        ],
+        "protections": {
+            "password_protection": {
+                "telnet": true
+            },
+            "user_task_stack_protection": {
+                "global_stack_fill": true,
+                "no_exec": true,
+                "guard_zones": true,
+                "check_stack_xrefs": 0
+            },
+            "write_protection": {
+                "vector_table": true,
+                "kernel_text": true,
+                "virtual_mem_text": true,
+                "user_text": true
+            },
+            "interrupt_stack_protection": {
+                "guard_zones": true
+            }
+        }
     }
 }

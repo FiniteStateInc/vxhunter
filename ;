@@ -6,37 +6,18 @@ import os
 import shutil
 import subprocess
 import tempfile
-import sys
 
 from botocore.exceptions import ClientError
 from os.path import abspath, dirname, join, isfile
 from pprint import pprint
 
 def report_fail(fname, expected, actual):
-    print(('*' * 50) + ('\n[-] Something got fucked on %s. Fail. \n' % fname) + ('*' * 50))
-    print('Expected:')
+    print(('*' * 50) + '****** FAIL ******' + ('*' * 50))
+    print('%s, expected:' % fname)
     pprint(expected)
-    print('Got:')
+    print('got: ')
     pprint(actual)
     exit()
-
-
-def check_dict(fname, expected, actual):
-    exp_items = sorted(expected.items(), key=lambda kv: kv[0])
-    act_items = sorted(actual.items(), key=lambda kv: kv[0])
-
-    if len(exp_items) != len(act_items):
-        print(len(exp_items), len(act_items))
-        report_fail(fname, expected, actual)
-
-    for exp_item, act_item in zip(exp_items, act_items):
-        if exp_item != act_item:
-            report_fail(fname, exp_item, act_item)
-
-
-def check_array(fname, expected, actual):
-    for exp_item, act_item in zip(expected, actual):
-        check_dict(fname, exp_item, act_item)
 
 
 def check_vx_analysis(prj_dir, prj_name, fname, plugin_name, vx_ver, expected_results):
@@ -86,9 +67,35 @@ def check_vx_analysis(prj_dir, prj_name, fname, plugin_name, vx_ver, expected_re
     else:
         protections = None
 
-    check_array(fname, expected_results['accounts'], accounts)
-    check_array(fname, expected_results['services'], services)
-    check_dict(fname, expected_results['protections'], protections)
+    if accounts != expected_results['accounts']:
+        print('*' * 50)
+        print(('*' * 15) + ' FAIL ' + ('*' * 15))
+        print('*' * 50)
+        print('%s, expected:' % fname)
+        pprint(expected_results['accounts'])
+        print('got: ')
+        pprint(accounts)
+        exit()
+
+    if services != expected_results['services']:
+        print('*' * 50)
+        print('****** FAIL ******')
+        print('*' * 50)
+        print('%s, expected:' % fname)
+        pprint(expected_results['services'])
+        print('got: ')
+        pprint(services)
+        exit()
+
+    if services != expected_results['protections']:
+        print('*' * 50)
+        print('****** FAIL ******')
+        print('*' * 50)
+        print('%s, expected:' % fname)
+        pprint(expected_results['protections'])
+        print('got: ')
+        pprint(protections)
+        exit()
 
     print('-' * 50)
     print('[+] %s check ran successfully!' % fname)
@@ -105,6 +112,7 @@ if __name__ == '__main__':
 
     # set up a temporary directory to download a zip
     with tempfile.TemporaryDirectory() as tmp_download_dir:
+
         # download the VxWorks test Ghidra archive from s3
         prj_name = 'vxworks_test'
 
@@ -149,22 +157,7 @@ if __name__ == '__main__':
         with open(join(dirname(__file__), 'expected_analysis_data.json')) as f:
             expected_results = json.load(f)
 
-        test_cases = [('101', 6), ('BMECRA31210_Master.bin', 6), ('CRA31200_Com.bin', 6), ('firmware', 5), ('kernel', 5), ('tcm_code', 6)]
-
-        if len(sys.argv) > 1:
-            tmp = []
-
-            for name, ver in test_cases:
-                if name == sys.argv[1]:
-                    tmp = [(name, ver)]
-                    break
-
-            if len(tmp) > 0:
-                test_cases = tmp
-            else:
-                print('Couldn\'t find %s in the test cases. Testing on all of them' % sys.argv[1])
-
         # for each file in the project, run vxworks_analysis and assert that the output is as expected
-        for fname, vx_ver in test_cases:
+        for fname, vx_ver in [('101', 6), ('BMECRA31210_Master.bin', 6), ('CRA31200_Com.bin', 6), ('firmware', 5), ('kernel', 5), ('tcm_code', 6)]:
             check_vx_analysis(tmp_download_dir, 'vxworks', fname, 'King Gheedorah', vx_ver, expected_results[fname])
 
