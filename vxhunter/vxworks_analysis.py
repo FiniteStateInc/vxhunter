@@ -343,7 +343,7 @@ def get_login_accouts():
     return accounts
 
 
-def get_available_services(vx_ver):
+def get_available_services():
     '''
     Use known function names to determine if services such as telnet, ftp, and wdbg are enabled.
 
@@ -354,7 +354,6 @@ def get_available_services(vx_ver):
     for service_name, funcs in SERVICE_FUNCS.items():
         service = {
             'name': service_name,
-            'version': vx_ver,
             'enabled': False
         }
 
@@ -456,7 +455,7 @@ if __name__ == '__main__':
     # Look at VxWorks specific functions to try to improve the analysis report.
     accounts = get_login_accouts()
     bootline = get_bootline()
-    services = get_available_services(vx_ver)
+    services = get_available_services()
     protections = get_protections(vx_ver)
 
     if bootline is not None:
