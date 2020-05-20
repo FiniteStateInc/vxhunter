@@ -4,13 +4,13 @@
             {"origin": "usrBootLineInit", "services": [], "password": "flash(0,0)host:/flash/os.bin e=0.0.0.0:fffff000 h=0.0.0.0 u=netarm pw=netsilicon f=0x08 tn=ns9360 o=", "username": "bootline"}
         ],
         "services": [
-            {"version": 6, "enabled": false, "name": "tftpd"},
-            {"version": 6, "enabled": false, "name": "sshd"},
-            {"version": 6, "enabled": false, "name": "wdbDbg"},
-            {"version": 6, "enabled": false, "name": "snmpd"},
-            {"version": 6, "enabled": false, "name": "ftpd"},
-            {"version": 6, "enabled": false, "name": "telnetd"},
-            {"version": 6, "enabled": false, "name": "shell"}
+            {"enabled": false, "name": "tftpd"},
+            {"enabled": false, "name": "sshd"},
+            {"enabled": false, "name": "wdbDbg"},
+            {"enabled": false, "name": "snmpd"},
+            {"enabled": false, "name": "ftpd"},
+            {"enabled": false, "name": "telnetd"},
+            {"enabled": false, "name": "shell"}
         ],
         "protections": {
             "password_protection": {
@@ -41,13 +41,13 @@
             {"origin": "usrBootLineInit", "services": [], "password": "stGMac(0,0)host:vxWorks h=198.168.0.45 e=198.168.0.50:ffffff00 u=vxworks pw=cc f=0x0 tn=spear", "username": "bootline"}
         ],
         "services": [
-            {"version": 6, "enabled": false, "name": "tftpd"},
-            {"version": 6, "enabled": false, "name": "sshd"},
-            {"version": 6, "enabled": true, "name": "wdbDbg"},
-            {"version": 6, "enabled": false, "name": "snmpd"},
-            {"version": 6, "enabled": false, "name": "ftpd"},
-            {"version": 6, "enabled": false, "name": "telnetd"},
-            {"version": 6, "enabled": true, "name": "shell"}
+            {"enabled": false, "name": "tftpd"},
+            {"enabled": false, "name": "sshd"},
+            {"enabled": true, "name": "wdbDbg"},
+            {"enabled": false, "name": "snmpd"},
+            {"enabled": false, "name": "ftpd"},
+            {"enabled": false, "name": "telnetd"},
+            {"enabled": true, "name": "shell"}
         ],
         "protections": {
             "password_protection": {
@@ -81,13 +81,13 @@
             {"origin": "usrBootLineInit", "services": [], "password": "stGMac(0,0)host:vxWorks h=198.168.0.45 e=198.168.0.50:ffffff00 u=vxworks pw=cc f=0x0 tn=spear", "username": "bootline"}
         ],
         "services": [
-            {"version": 6, "enabled": false, "name": "tftpd"},
-            {"version": 6, "enabled": false, "name": "sshd"},
-            {"version": 6, "enabled": true, "name": "wdbDbg"},
-            {"version": 6, "enabled": true, "name": "snmpd"},
-            {"version": 6, "enabled": false, "name": "ftpd"},
-            {"version": 6, "enabled": false, "name": "telnetd"},
-            {"version": 6, "enabled": true, "name": "shell"}
+            {"enabled": false, "name": "tftpd"},
+            {"enabled": false, "name": "sshd"},
+            {"enabled": true, "name": "wdbDbg"},
+            {"enabled": true, "name": "snmpd"},
+            {"enabled": false, "name": "ftpd"},
+            {"enabled": false, "name": "telnetd"},
+            {"enabled": true, "name": "shell"}
         ],
         "protections": {
             "password_protection": {
@@ -113,13 +113,13 @@
     "firmware": {
         "accounts": [],
         "services": [
-            {"version": 5, "enabled": false, "name": "tftpd"},
-            {"version": 5, "enabled": false, "name": "sshd"},
-            {"version": 5, "enabled": false, "name": "wdbDbg"},
-            {"version": 5, "enabled": false, "name": "snmpd"},
-            {"version": 5, "enabled": false, "name": "ftpd"},
-            {"version": 5, "enabled": false, "name": "telnetd"},
-            {"version": 5, "enabled": false, "name": "shell"}
+            {"enabled": false, "name": "tftpd"},
+            {"enabled": false, "name": "sshd"},
+            {"enabled": false, "name": "wdbDbg"},
+            {"enabled": false, "name": "snmpd"},
+            {"enabled": false, "name": "ftpd"},
+            {"enabled": false, "name": "telnetd"},
+            {"enabled": false, "name": "shell"}
         ],
         "protections": {
             "user_task_stack_protection": {
@@ -139,13 +139,13 @@
             {"origin": "usrBootLineInit", "services": [], "password": "tffs=(0,0)FLASH0:/FLASH0/wwwroot/conf/exec/FBC000.bin h=205.217.193.81 e=205.217.193.83 u=user tn=cirrus f=0x80", "username": "bootline"}
         ],
         "services": [
-            {"version": 5, "enabled": false, "name": "tftpd"},
-            {"version": 5, "enabled": false, "name": "sshd"},
-            {"version": 5, "enabled": false, "name": "wdbDbg"},
-            {"version": 5, "enabled": true, "name": "snmpd"},
-            {"version": 5, "enabled": true, "name": "ftpd"},
-            {"version": 5, "enabled": false, "name": "telnetd"},
-            {"version": 5, "enabled": true, "name": "shell"}
+            {"enabled": false, "name": "tftpd"},
+            {"enabled": false, "name": "sshd"},
+            {"enabled": false, "name": "wdbDbg"},
+            {"enabled": true, "name": "snmpd"},
+            {"enabled": true, "name": "ftpd"},
+            {"enabled": false, "name": "telnetd"},
+            {"enabled": true, "name": "shell"}
         ],
         "protections": {
             "user_task_stack_protection": {
@@ -164,13 +164,13 @@
             {"origin": "usrBootLineInit", "services": [], "password": "motetsec(1,0)host:vxWorks.st u=target pw=vxTarget f=0x0 tn=TCM2", "username": "bootline"}
         ],
         "services": [
-            {"version": 6, "enabled": false, "name": "tftpd"},
-            {"version": 6, "enabled": false, "name": "sshd"},
-            {"version": 6, "enabled": true, "name": "wdbDbg"},
-            {"version": 6, "enabled": false, "name": "snmpd"},
-            {"version": 6, "enabled": false, "name": "ftpd"},
-            {"version": 6, "enabled": false, "name": "telnetd"},
-            {"version": 6, "enabled": true, "name": "shell"}
+            {"enabled": false, "name": "tftpd"},
+            {"enabled": false, "name": "sshd"},
+            {"enabled": true, "name": "wdbDbg"},
+            {"enabled": false, "name": "snmpd"},
+            {"enabled": false, "name": "ftpd"},
+            {"enabled": false, "name": "telnetd"},
+            {"enabled": true, "name": "shell"}
         ],
         "protections": {
             "password_protection": {
