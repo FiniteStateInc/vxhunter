@@ -69,7 +69,7 @@ def create_symbol_table(symtab_start, symtab_end, vx_version):
     fp.createLabel(symtab_start_addr, "vxSymTbl", True)
 
     # Make way for the symbol table (end address is inclusive)!
-    fp.clearListing(symtab_start_addr, symtab_end_addr - 1)
+    fp.clearListing(symtab_start_addr, symtab_end_addr.subtract(1))
 
     # Finally create the actual table.
     sym_array_dt = ArrayDataType(dt, symtab_length, dt.getLength())
