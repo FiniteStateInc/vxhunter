@@ -44,11 +44,6 @@ PROTECTION_FUNCS = {
             'no_exec': ['taskStackNoExecEnable'],
             'guard_zones': ['taskStackGuardPageEnable']
         }
-    },
-    'password_protection': {
-        6: {
-            'telnet': ['usrSecurity']
-        }
     }
 }
 
@@ -398,6 +393,9 @@ def get_protections(vx_ver):
         protections[prot_category_name] = prots
 
     # TODO: Figure out a data model for protections so that non-functions don't have to be treated separately
+
+    # Check if the `usrSecurity` function is called from a root
+    protections['password_protection'] = is_func_called_from_a_root('usrSecurity', ROOTS)
 
     # See if the global variable `sysTextProtect` is 1
     kprotect_sym = get_symbol('sysTextProtect')
