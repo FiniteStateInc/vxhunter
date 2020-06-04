@@ -6,7 +6,7 @@ from ghidra.program.model.symbol import RefType, SourceType
 from ghidra.program.flatapi import FlatProgramAPI
 
 from symbol import get_function
-from function_analyzer import get_all_calls_to_addr
+from function_analyzer import get_all_calls_to_addr, get_calls_in_func
 from common import print_err
 
 from __main__ import currentProgram
@@ -20,7 +20,7 @@ void_dt = VoidDataType()
 char_ptr_dt = PointerDataType(char_dt)
 void_ptr_dt = PointerDataType(void_dt)
 
-cpy_func_signatures = {
+func_signatures = {
     'memcpy': {
         'args': [{ 'dt': void_ptr_dt, 'name': 'dst' }, { 'dt': void_ptr_dt, 'name': 'src' }],
         'retval': void_ptr_dt
@@ -28,20 +28,51 @@ cpy_func_signatures = {
     'strcpy': {
         'args': [{ 'dt': char_ptr_dt, 'name': 'dst' }, { 'dt': char_ptr_dt, 'name': 'src' }],
         'retval': char_ptr_dt
+    },
+    'loginUserAdd': {
+        'args': [{ 'dt': char_ptr_dt, 'name': 'username'}, { 'dt': char_ptr_dt, 'name': 'password' }], 
+        'retval': void_dt,                                                                              
     }
 }
+
+def loginUserAdd_uses_ipcom_hash():
+    loginUserAdd = get_function('loginUserAdd')
+    if loginUserAdd is None:
+        return False
+
+    ipcom_auth_useradd_hash = get_function('ipcom_auth_useradd_hash')
+    if ipcom_auth_useradd_hash is None:
+        return False
+
+    hash_func_addr = ipcom_auth_useradd_hash.entryPoint
+    call_data = get_calls_in_func(loginUserAdd, target_func_addrs=[hash_func_addr])
+    return hash_func_addr in call_data
+
+def get_func_end_addr(func):
+    insn = fp.getInstructionAt(func.entryPoint)
+    end_addr = insn.address
+
+    while insn is not None and fp.getFunctionContaining(insn.address) == func:
+        end_addr = insn.address
+        insn = insn.next
+
+    return end_addr
+
+def get_function_calling_convention(func):
+    cc = func.callingConvention
+
+    if cc is None:
+        func_man = cp.functionManager
+        cc = func_man.defaultCallingConvention
+
+    return cc
 
 def set_function_signature(func, correct_args, correct_retval):
     '''
     Set the function signature of the given function if it doesn't match our desired signature.
     '''
     siggie = func.signature
-    calling_conv = func.callingConvention
-
-    # Check if the calling convention of the function is explicitly set
-    if calling_conv is None:
-        func_man = cp.functionManager
-        calling_conv = func_man.defaultCallingConvention
+    calling_conv = get_function_calling_convention(func)
 
     args = [arg.dataType for arg in siggie.arguments]
     retval = siggie.returnType
@@ -61,15 +92,11 @@ def set_function_signature(func, correct_args, correct_retval):
     if retval != correct_retval:
         func.setReturnType(correct_retval, SourceType.USER_DEFINED)
 
+def fixup_function_signatures(script_name=None):
+    if loginUserAdd_uses_ipcom_hash():
+        func_signatures['loginUserAdd']['args'].append({ 'dt': char_ptr_dt, 'name': 'salt' })
 
-def get_func_addrs_and_set_signatures(func_sigs, script_name=None):
-    '''
-    Get a list of function addresses specified by func_sigs (a dictionary of names -> sigs)
-    and fix said function's signatures.
-    '''
-    funcs = []
-
-    for func_name, siggie in func_sigs.items():
+    for func_name, siggie in func_signatures.items():
         func = get_function(func_name)
 
         if func is None:
@@ -77,22 +104,11 @@ def get_func_addrs_and_set_signatures(func_sigs, script_name=None):
             continue
 
         set_function_signature(func, siggie['args'], siggie['retval'])
-        funcs.append(func.entryPoint)
 
-    return funcs
-
-
-def is_func_called_from_a_root(func_name, roots, depth=0, visited_func_addrs=[], max_depth=10, orig_func=None):
+def is_func_called_from_a_root(func_name, roots, depth=0, visited_func_addrs=[], max_depth=10):
     '''
     Return whether or not a function is called from one of the root functions specified
     '''
-    if orig_func is None:
-        #print_err(func_name)
-        orig_func = func_name
-    else:
-        #print_err('%s -> %s, %d' % (orig_func, func_name, depth))
-        pass
-
     func = get_function(func_name)
 
     # You can't call a function that doesn't exist!
@@ -129,7 +145,7 @@ def is_func_called_from_a_root(func_name, roots, depth=0, visited_func_addrs=[],
             continue
 
         # Recurse if it isn't (basically DFS on the call graph)
-        if is_func_called_from_a_root(calling_func.name, roots, depth, visited_func_addrs, 10, orig_func):
+        if is_func_called_from_a_root(calling_func.name, roots, depth, visited_func_addrs, 10):
             return True
 
     # Alas, the function was not called

@@ -1,4 +1,5 @@
 from ghidra.app.decompiler import DecompInterface, DecompileOptions, DecompileResults
+from ghidra.program.model.mem import MemoryAccessException
 from ghidra.program.model.pcode import HighParam, PcodeOp, PcodeOpAST, VarnodeTranslator
 from ghidra.program.model.address import GenericAddress
 from ghidra.program.database.code import DataDB
@@ -17,7 +18,8 @@ BINARY_PCODE_OPS = {
 
 varnode_spaces = {
     'register': {},
-    'unique': {}
+    'unique': {},
+    'ram': {}
 }
 
 decompile_func_cache = {}
@@ -102,7 +104,10 @@ def get_pcode_value(pcode, emulate=False):
         # Right now, we're only handling loads from RAM
 
         if space_ram is not None and space == space_ram:
-            return get_value_from_addr(addr, pcode.output.size)
+            try:
+                return get_value_from_addr(addr, pcode.output.size)
+            except MemoryAccessException:
+                return None
         else:
             print_err('Unhandled load space %d for pcode %s' % (space, pcode))
             return None
@@ -364,17 +369,11 @@ def get_calls_in_func(func, target_func_addrs=None):
 
     return call_params
 
-
-def emulate_func(func, reg_names):
-    '''
-    Emulate the pcode of a function to get the values of certain registers.
-    '''
-    reg_vals = {}
-    regs = {}
-
-    for reg_name in reg_names:
-        regs[reg_name] = cp.language.getRegister(reg_name)
-
+'''
+def emulate_func(func):
+    varnodes = {
+        'register': {},
+    }
     insn = fp.getInstructionAt(func.getEntryPoint())
 
     # Iterate over all instructions of the function
@@ -393,18 +392,19 @@ def emulate_func(func, reg_names):
 
         insn = insn.next
 
+    reg_space = varnode_spaces['register']
+    ram_space = varnode_spaces['ram']
+
     # Check if we now know the value of our target registers
     translator = VarnodeTranslator(cp)
-    reg_space = varnode_spaces['register']
 
-    for reg_name, reg in regs.items():
-        reg_off = translator.getVarnode(reg).offset
-
-        if reg_off in reg_space:
-            reg_vals[reg] = reg_space[reg_off]
+    for reg_off, reg_val in reg_space.items():
+        reg = translator.getRegister(reg_off)
+        varnodes['register'][reg] = reg_val
 
     # Clear any temporary varnodes we stored so we don't corrupt later results
     clear_varnodes()
 
-    return reg_vals
+    return varnodes
+'''
 

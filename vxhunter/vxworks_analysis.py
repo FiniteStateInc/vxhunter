@@ -5,10 +5,12 @@ import json
 from functools import reduce
 
 from ghidra.program.model.symbol import RefType, SourceType
+from ghidra.program.model.data import IntegerDataType
 
 from vxutility.common import *
 from vxutility.function_analyzer import *
-from vxutility.function_utils import get_func_addrs_and_set_signatures, cpy_func_signatures, is_func_called_from_a_root
+from vxutility.function_utils import fixup_function_signatures, is_func_called_from_a_root
+from vxutility.emulation import emulate_func
 from vxutility.symbol import *
 
 
@@ -47,6 +49,19 @@ PROTECTION_FUNCS = {
     }
 }
 
+PROTECTION_VARS = {
+    'kernel_stack_protection': {
+        'guard_overflow_size_exec': 'taskKerExecStkOverflowSize',
+        'guard_underflow_size_exec': 'taskKerExecStkUnderflowSize',
+        'guard_overflow_size_exception': 'taskKerExcStkOverflowSize'
+    },
+    'user_task_stack_protection': {
+        'guard_overflow_size_exec': 'taskUsrExecStkOverflowSize',
+        'guard_underflow_size_exec': 'taskUsrExecStkUnderflowSize',
+        'guard_overflow_size_exception': 'taskUsrExcStkOverflowSize'
+    }
+}
+
 ROOTS = ['usrRoot', 'usrKernelInit', 'usrInit', 'sysInit', 'sysStart']
 
 
@@ -69,16 +84,34 @@ def get_sda_regs():
         print_err('Can\'t find any calls to vxSdaInit')
         return
 
+    '''
     #min_call_addr = min(calls.keys())
-    sda_reg_vals = emulate_func(target_function, ['r2', 'r13'])
+    sda_reg_vals = emulate_func(target_function)['register']
+    '''
+
+    emu = emulate_func(target_function, [])
+    if emu is None:
+        return
 
     #next_insn_addr = fp.getInstructionAfter(min_call_addr).address
     min_addr = get_main_memory().start
     max_addr = get_main_memory().end
-    prog_ctx = cp.programContext
 
-    for reg, val in sda_reg_vals.items():
-        print('Setting %s to %x starting at %s' % (reg.name, val, min_addr))
+    prog_ctx = cp.programContext
+    lang = cp.language
+
+    for name in ['r2', 'r13']:
+        reg = lang.getRegister(name)
+        if reg is None:
+            print('Could not find register %s' % name)
+            continue
+
+        val = emu.readRegister(name)
+        if val is None or val == 0:
+            print('Register %s has an unknown value after emulation' % name)
+            continue
+
+        print('Setting %s to %x starting at %s' % (name, val, min_addr))
         prog_ctx.setValue(reg, min_addr, max_addr, long(val))
 
 
@@ -242,8 +275,8 @@ def get_bootline():
         print_err('Can\'t find usrBootLineInit', script_name)
         return None
 
-    # Get the address for the two functions we have seen to copy the bootline.
-    cpy_func_addrs = get_func_addrs_and_set_signatures(cpy_func_signatures, script_name=script_name)
+    cpy_funcs = [get_function(name) for name in ['memcpy', 'strcpy']]
+    cpy_func_addrs = [func.entryPoint for func in cpy_funcs if func is not None]
 
     # Get the value of the second parameter to the last copy function
     # called from usrBootLineInit.
@@ -260,13 +293,15 @@ def get_bootline():
     return None
 
 
-def get_function_params(func_name, param_idxs):
+def get_function_params(func_name, param_descs):
     global script_name
 
     objs = []
 
     target_function = get_function(func_name)
-    min_num_params = max(param_idxs.values()) + 1
+
+    param_idxs = [desc['idx'] for desc in param_descs.values()]
+    min_num_params = max(param_idxs) + 1
 
     if target_function is None:
         print_err('Can\'t find function %s' % func_name, script_name)
@@ -282,7 +317,10 @@ def get_function_params(func_name, param_idxs):
 
         obj = {}
 
-        for param_name, param_idx in param_idxs.items():
+        for param_name, param_desc in param_descs.items():
+            param_idx = param_desc['idx']
+            is_string = param_desc.get('is_string', False) # TODO: change to more general notion of a pointer
+
             if param_idx >= len(params):
                 print_err('%s is not a valid param index' % param_name)
 
@@ -291,7 +329,22 @@ def get_function_params(func_name, param_idxs):
                 continue
 
             param = params[param_idx]
-            param_val = maybe_get_string_at(fp.toAddr(param))
+            param_val = None
+
+            if is_string:
+                param_val = get_ascii_at(fp.toAddr(param))
+
+                # TODO: figure out a way to make this faster since there's gonna be a lot of x-refs to strcpy so it's gonna be slow
+                '''
+                if param_val is None and func_name != 'strcpy':
+                    strcpy_params = get_function_params('strcpy', { 'dst': { 'idx': 0, 'is_string': False }, 'src': { 'idx': 1, 'is_string': True } })
+                    srcs = [params['src'] for params in strcpy_params if params['dst'] == param]
+
+                    if len(srcs) > 0 and srcs[0] is not None:
+                        param_val = srcs[0]
+                '''
+            else:
+                param_val = param
 
             if param_val is None:
                 print_err('%s is None' % param_name)
@@ -323,13 +376,13 @@ def get_login_accouts():
     accounts = []
 
     login_user_add_params = {
-        'username': 0,
-        'password_hash': 1
+        'username': {'idx': 0, 'is_string': True},
+        'password_hash': {'idx': 1, 'is_string': True}
     }
 
     ipcom_auth_useradd_params = {
-        'username': 0,
-        'password': 1
+        'username': {'idx': 0, 'is_string': True},
+        'password': {'idx': 1, 'is_string': True}
     }
 
     accounts.extend(get_login_function('loginUserAdd', login_user_add_params, associated_services=['shell']))
@@ -367,6 +420,61 @@ def get_available_services():
     return services
 
 
+def get_guard_page_sizes(protections):
+    # The guard page sizes are passed as parameters to taskLibInit.
+    # I'm not positive that param 2 corresponds to `taskKerExcStkOverflowSize` but it makes sense.
+    guard_page_params = {
+        'taskUsrExcStkOverflowSize': {'idx': 1},
+        'taskKerExcStkOverflowSize': {'idx': 2},
+        'taskUsrExecStkOverflowSize': {'idx': 3},
+        'taskUsrExecStkUnderflowSize': {'idx': 4},
+        'taskKerExecStkOverflowSize': {'idx': 5},
+        'taskKerExecStkUnderflowSize': {'idx': 6}
+    }
+
+    guard_page_vals = get_function_params('taskLibInit', guard_page_params)
+
+    if len(guard_page_vals) > 0:
+        guard_page_vals = guard_page_vals[0]
+
+    for prot_category_name, category_prot_vars in PROTECTION_VARS.items():
+        if prot_category_name not in protections:
+            protections[prot_category_name] = {}
+
+        for prot_name, prot_var in category_prot_vars.items():
+            if prot_var in guard_page_vals:
+                protections[prot_category_name][prot_name] = guard_page_vals[prot_var]
+
+    func = get_function('usrKernelInit')
+    if func is None:
+        print('kernelInit is None')
+        return
+
+    int_dt = IntegerDataType()
+    params = [('global_no_stack_fill', int_dt, 0)]
+
+    emu = emulate_func(func, params)
+    if emu is None:
+        return
+
+    int_stk_var_name_mapping = {
+        'vxIntStackOverflowSize': 'guard_overflow_size', 
+        'vxIntStackUnderflowSize': 'guard_underflow_size'
+    }
+
+    if 'interrupt_stack_protection' not in protections:
+        protections['interrupt_stack_protection'] = {}
+
+    for var_name, key_name in int_stk_var_name_mapping.items():
+        var = get_symbol(var_name)
+        if var is None:
+            print('Couldn\'t find symbol %s' % var_name)
+            continue
+
+        value = get_value(emu.readMemory(var.address, word_size))
+        protections['interrupt_stack_protection'][key_name] = value
+
+
 def get_protections(vx_ver):
     '''
     Get the memory protections (NX stack, W^X, etc.) used in the binary.
@@ -392,6 +500,9 @@ def get_protections(vx_ver):
 
         protections[prot_category_name] = prots
 
+    if vx_ver == 6:
+        get_guard_page_sizes(protections)
+
     # TODO: Figure out a data model for protections so that non-functions don't have to be treated separately
 
     # Check if the `usrSecurity` function is called from a root
@@ -411,16 +522,19 @@ def get_protections(vx_ver):
     nostackfill_sym = get_symbol('globalNoStackFill')
     global_stack_fill = False
 
-    # If the symbol doesn't exist, try getting the parameter passed to usrKernelInit which
-    # should have the same meaning.
-    if nostackfill_sym is None:
-        stackfill_params = get_function_params('usrKernelInit', {'stackfill': 0})
-
-        # For now, assume that every call to usrKernelInit should pass 0.
-        if len(stackfill_params) > 0:
-            global_stack_fill = sum([p['stackfill'] for p in stackfill_params if 'stackfill' in p]) == 0
-    else:
+    if nostackfill_sym is not None:
         global_stack_fill = get_value_from_addr(nostackfill_sym.address, word_size) == 0
+
+    # Try getting the parameter passed to usrKernelInit which should overwrite globalNoStackFill.
+    nostackfill_params = get_function_params('usrKernelInit', {'nostackfill': {'idx': 0}})
+
+    # For now, assume that every call to usrKernelInit should pass 0.
+    if len(nostackfill_params) > 0:
+        # Wrap in a try-catch in case the nostackfill param is for some reason not an integer.
+        try:
+            global_stack_fill = sum([p.get('nostackfill', 0) for p in nostackfill_params]) == 0
+        except TypeError:
+            pass
 
     # Get the number of calls to the checkStack function
     check_stack_func = get_function('checkStack')
@@ -446,6 +560,7 @@ if __name__ == '__main__':
         exit()
 
     # Try to enrich the database by adding x-refs, mapping memory, etc.
+    fixup_function_signatures(script_name)
     get_sda_regs()
     create_bss()
     add_function_xrefs_from_symbol_find()

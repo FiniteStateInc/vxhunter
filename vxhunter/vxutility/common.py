@@ -139,15 +139,11 @@ def read_data_at(addr, size):
     return fp.getBytes(addr, size)
 
 
-def maybe_define_string(addr):
-    '''
-    Try to define a string at `addr`.
-    '''
+def get_ascii_at(addr, maxlen=1000):
     s = ''
-    strlen = 0
     ptr = fp.toAddr(addr.offset)
 
-    while fp.getDataAt(ptr) is None:
+    while len(s) < maxlen:
         try:
             char = chr(fp.getBytes(ptr, 1)[0]) # read one byte at a time
         except:
@@ -160,14 +156,22 @@ def maybe_define_string(addr):
             return None
 
         s += char
-        strlen += 1
         ptr = ptr.add(1)
 
-    if strlen == 0: # don't define an empty string
+    return s
+
+
+def maybe_define_string(addr):
+    '''
+    Try to define a string at `addr`.
+    '''
+    s = get_ascii_at(addr)
+    
+    if s is None or len(s) == 0: # don't define an empty string
         return None
 
     try:
-        if fp.createAsciiString(addr, strlen) is None: # try to create the string
+        if fp.createAsciiString(addr, len(s)) is None: # try to create the string
             return None
     except CodeUnitInsertionException:
         return None
@@ -241,6 +245,9 @@ def split_main_memory(addr):
 
 def join_blocks(b1, b2):
     return do_memory_op(mem.join, b1, b2)
+
+def remove_block(b):
+    do_memory_op(mem.removeBlock, b, TaskMonitor.DUMMY)
 
 def get_memory_blocks():
     return mem.blocks

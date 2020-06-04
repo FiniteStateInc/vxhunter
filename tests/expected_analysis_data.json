@@ -13,10 +13,16 @@
             {"enabled": false, "name": "shell"}
         ],
         "protections": {
-            "password_protection": {
-                "telnet": false
+            "password_protection": false,
+            "kernel_stack_protection": {
+                "guard_overflow_size_exec": 4096,
+                "guard_underflow_size_exec": 4096,
+                "guard_overflow_size_exception": 0
             },
             "user_task_stack_protection": {
+                "guard_overflow_size_exec": 4096,
+                "guard_underflow_size_exec": 4096,
+                "guard_overflow_size_exception": 4096,
                 "global_stack_fill": false,
                 "no_exec": false,
                 "guard_zones": false,
@@ -50,10 +56,16 @@
             {"enabled": true, "name": "shell"}
         ],
         "protections": {
-            "password_protection": {
-                "telnet": false
+            "password_protection": false,
+            "kernel_stack_protection": {
+                "guard_overflow_size_exec": 4096,
+                "guard_underflow_size_exec": 4096,
+                "guard_overflow_size_exception": 0
             },
             "user_task_stack_protection": {
+                "guard_overflow_size_exec": 4096,
+                "guard_underflow_size_exec": 4096,
+                "guard_overflow_size_exception": 4096,
                 "global_stack_fill": true,
                 "no_exec": false,
                 "guard_zones": false,
@@ -90,10 +102,16 @@
             {"enabled": true, "name": "shell"}
         ],
         "protections": {
-            "password_protection": {
-                "telnet": false
+            "password_protection": false,
+            "kernel_stack_protection": {
+                "guard_overflow_size_exec": 4096,
+                "guard_underflow_size_exec": 4096,
+                "guard_overflow_size_exception": 0
             },
             "user_task_stack_protection": {
+                "guard_overflow_size_exec": 4096,
+                "guard_underflow_size_exec": 4096,
+                "guard_overflow_size_exception": 4096,
                 "global_stack_fill": true,
                 "no_exec": false,
                 "guard_zones": false,
@@ -122,6 +140,7 @@
             {"enabled": false, "name": "shell"}
         ],
         "protections": {
+            "password_protection": false,
             "user_task_stack_protection": {
                 "global_stack_fill": false,
                 "check_stack_xrefs": 0
@@ -148,6 +167,7 @@
             {"enabled": true, "name": "shell"}
         ],
         "protections": {
+            "password_protection": false,
             "user_task_stack_protection": {
                 "global_stack_fill": false,
                 "check_stack_xrefs": 0
@@ -173,10 +193,16 @@
             {"enabled": true, "name": "shell"}
         ],
         "protections": {
-            "password_protection": {
-                "telnet": true
+            "password_protection": true,
+            "kernel_stack_protection": {
+                "guard_overflow_size_exec": 4096,
+                "guard_underflow_size_exec": 4096,
+                "guard_overflow_size_exception": 0
             },
             "user_task_stack_protection": {
+                "guard_overflow_size_exec": 4096,
+                "guard_underflow_size_exec": 4096,
+                "guard_overflow_size_exception": 4096,
                 "global_stack_fill": true,
                 "no_exec": true,
                 "guard_zones": true,
