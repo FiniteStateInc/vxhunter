@@ -334,6 +334,9 @@ def get_function_params(func_name, param_descs):
             if is_string:
                 param_val = get_ascii_at(fp.toAddr(param))
 
+                if param_val is not None and len(param_val) == 0:
+                    param_val = None
+
                 # TODO: figure out a way to make this faster since there's gonna be a lot of x-refs to strcpy so it's gonna be slow
                 '''
                 if param_val is None and func_name != 'strcpy':
@@ -359,14 +362,20 @@ def get_function_params(func_name, param_descs):
 
 def get_login_function(func_name, param_idxs, associated_services=[]):
     accounts = get_function_params(func_name, param_idxs)
+    tmp_accounts = []
 
     for account in accounts:
+        if len(account) == 0:
+            continue
+
         account.update({ 
             'services': associated_services,
             'origin': func_name
         })
 
-    return accounts
+        tmp_accounts.append(account)
+
+    return tmp_accounts
 
 
 def get_login_accouts():
@@ -385,8 +394,13 @@ def get_login_accouts():
         'password': {'idx': 1, 'is_string': True}
     }
 
-    accounts.extend(get_login_function('loginUserAdd', login_user_add_params, associated_services=['shell']))
-    accounts.extend(get_login_function('ipcom_auth_useradd', ipcom_auth_useradd_params, associated_services=['ssh']))
+    accounts.extend(get_login_function('loginUserAdd', 
+                                       login_user_add_params, 
+                                       associated_services=['shell']))
+
+    accounts.extend(get_login_function('ipcom_auth_useradd', 
+                                       ipcom_auth_useradd_params, 
+                                       associated_services=['ssh']))
 
     return accounts
 
