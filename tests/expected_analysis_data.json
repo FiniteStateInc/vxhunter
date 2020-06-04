@@ -35,6 +35,8 @@
                 "user_text": false
             },
             "interrupt_stack_protection": {
+                "guard_overflow_size": 0,
+                "guard_underflow_size": 0,
                 "guard_zones": false
             }
         }
@@ -78,6 +80,8 @@
                 "user_text": true
             },
             "interrupt_stack_protection": {
+                "guard_overflow_size": 0,
+                "guard_underflow_size": 0,
                 "guard_zones": false
             }
         }
@@ -124,6 +128,8 @@
                 "user_text": true
             },
             "interrupt_stack_protection": {
+                "guard_overflow_size": 0,
+                "guard_underflow_size": 0,
                 "guard_zones": false
             }
         }
@@ -215,6 +221,8 @@
                 "user_text": true
             },
             "interrupt_stack_protection": {
+                "guard_overflow_size": 4096,
+                "guard_underflow_size": 4096,
                 "guard_zones": true
             }
         }
