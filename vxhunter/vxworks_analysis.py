@@ -467,7 +467,12 @@ def get_guard_page_sizes(protections):
     int_dt = IntegerDataType()
     params = [('global_no_stack_fill', int_dt, 0)]
 
-    emu = emulate_func(func, params)
+    funcs_to_call = []
+    kernelInit = get_function('kernelInit')
+    if kernelInit is not None:
+        funcs_to_call.append(kernelInit.entryPoint)
+
+    emu = emulate_func(func, params, skip_calls=True, funcs_to_call=funcs_to_call)
     if emu is None:
         return
 
