@@ -18,7 +18,7 @@ cp = currentProgram
 fp = FlatProgramAPI(cp)
 mem = cp.memory
 
-SUPPORTED_VX_VERSIONS = [5, 6]
+SUPPORTED_VX_VERSIONS = [5, 6, 7]
 
 # Init program metadata
 word_size = cp.getDefaultPointerSize()
@@ -47,7 +47,7 @@ def get_args():
         script_name = sys.argv[0]
         vx_ver = int(askChoice('Pick a VxWorks Version', '...if you dare!', SUPPORTED_VX_VERSIONS, SUPPORTED_VX_VERSIONS[0]))
 
-    # Make sure our VxWorks version is 5 or 6
+    # Make sure our VxWorks version is 5, 6, or 7
     if vx_ver not in SUPPORTED_VX_VERSIONS:
         print_err('VxWorks version must be in %s' % ', '.join([int(v) for v in SUPPORTED_VX_VERSIONS]), script_name)
         vx_ver = None

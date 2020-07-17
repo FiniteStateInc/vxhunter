@@ -41,7 +41,7 @@ def add_symbol(name, name_addr, dest_addr, sym_type):
 
     # Just create a label if the function creation failed.
     if not function:
-        fp.createLabel(dest_addr, name, True) 
+        fp.createLabel(dest_addr, name, True)
         return
 
     function.setName(name, SourceType.USER_DEFINED)
@@ -54,7 +54,7 @@ def create_symbol_table(symtab_start, symtab_end, vx_version):
     sym_size = 0x10      # the size of a VxWorks symbol struct
     dt = vx_5_symtbl_dt  # the Ghidra datatype for the symbol struct
 
-    if vx_version == 6:
+    if vx_version == 6 or vx_version == 7:
         sym_size = 20
         dt = vx_6_symtbl_dt
 

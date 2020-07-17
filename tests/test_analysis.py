@@ -140,7 +140,7 @@ if __name__ == '__main__':
         with open(prp_path) as f:
             prp = f.read()
 
-        prp.replace('samlerner', getpass.getuser())
+        prp = prp.replace('samlerner', getpass.getuser())
 
         with open(prp_path, 'w') as f:
             f.write(prp)

@@ -129,12 +129,12 @@ def create_bss():
         return
 
     # Get the parameters of all calls to bzero in sysStart and usrInit.
-    calls = get_all_params_passed_to_func(target_function.getEntryPoint(), 
+    calls = get_all_params_passed_to_func(target_function.getEntryPoint(),
                                   search_funcs=['sysStart', 'usrInit'])
 
     for call_addr, params in calls.items():
         # bzero takes an address and size.
-        if len(params) != 2: 
+        if len(params) != 2:
             continue
 
         bss_start, bss_len = tuple(params)
@@ -143,7 +143,7 @@ def create_bss():
             continue
 
         # TODO: Label these addresses
-        bss_end = bss_start + bss_len 
+        bss_end = bss_start + bss_len
 
         # Don't recreate the segment if we've already created it or it's already mapped.
         #
@@ -157,7 +157,7 @@ def create_bss():
         if is_address_in_current_program(toAddr(bss_start)):
             max_addr = cp.getMaxAddress().offset + 1
 
-            if bss_start <= max_addr - 0x2000: 
+            if bss_start <= max_addr - 0x2000:
                 continue
 
             if not split_main_memory(toAddr(bss_start)):
@@ -169,7 +169,7 @@ def create_bss():
 
             bss_file_block = cp.memory.blocks[1]
 
-            bss_len -= max_addr - bss_end            
+            bss_len -= max_addr - bss_end
             bss_block = create_initialized_block('.bss', toAddr(max_addr), bss_len)
 
             if bss_block is None:
@@ -236,7 +236,7 @@ def add_function_xrefs_from_symbol_find():
         # Only count symbols where we have a valid name.
         name_data = getDataAt(toAddr(name_ptr))
 
-        if name_data is None or (not name_data.hasStringValue()): 
+        if name_data is None or (not name_data.hasStringValue()):
             continue
 
         name = str(name_data.getValue())
@@ -254,10 +254,10 @@ def add_function_xrefs_from_symbol_find():
         ref_to = to_function.getEntryPoint()
         ref_from = call_addr
 
-        ref_man.addMemoryReference(ref_from, 
-                                   ref_to, 
+        ref_man.addMemoryReference(ref_from,
+                                   ref_to,
                                    RefType.READ,
-                                   SourceType.USER_DEFINED, 
+                                   SourceType.USER_DEFINED,
                                    0)
 
 
@@ -267,7 +267,7 @@ def get_bootline():
     '''
     global script_name
 
-    # The bootline will be strcpy'd or memcpy'd at the end of the 
+    # The bootline will be strcpy'd or memcpy'd at the end of the
     # usrBootLineInit function.
     bootline_func = get_function('usrBootLineInit')
 
@@ -312,7 +312,7 @@ def get_function_params(func_name, param_descs):
 
     for call_addr, params in calls.items():
         # Make sure we at least were able to get the value of the username and password params.
-        if len(params) < min_num_params: 
+        if len(params) < min_num_params:
             continue
 
         obj = {}
@@ -561,7 +561,7 @@ def get_protections(vx_ver):
 
     if check_stack_func is not None:
         num_check_stacks = len(get_all_calls_to_addr(check_stack_func.entryPoint))
-    
+
     # Since both VxWorks 5 and 6 have stack fill/checkStack, we want to set them no matter if we found them
     write_prot_name = 'user_task_stack_protection'
     if not write_prot_name in protections:

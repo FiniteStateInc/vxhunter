@@ -20,7 +20,7 @@ VX5_SYM_TYPES = [
     0x81,  # Local symbols related to a PowerPC SDA2 section
 ]
 
-# Symbol types for VxWorks 6.8
+# Symbol types for VxWorks 6.8 -- also 7
 VX6_SYM_TYPES = [
     0x03,  # Global Absolute
     0x04,  # Local .text
@@ -38,19 +38,22 @@ VX6_SYM_TYPES = [
 # Dictionary mapping vx version to symbol types
 SYM_TYPES = {
     5: VX5_SYM_TYPES,
-    6: VX6_SYM_TYPES
+    6: VX6_SYM_TYPES,
+    7: VX6_SYM_TYPES # same as 6
 }
 
 # Symbol types that live in the .text section
 TEXT_SYM_TYPES = {
     5: [4, 5],
-    6: [4, 5]
+    6: [4, 5],
+    7: [4, 5]
 }
 
 # Symbol types that live in the .data section
 DATA_SYM_TYPES = {
     5: [6, 7],
-    6: [8, 9]
+    6: [8, 9],
+    7: [8, 9]
 }
 
 # The amount of entries in a candidate symbol table needed for it to be chosen as the actual symbol table
@@ -70,11 +73,11 @@ def get_symbol_fmt(endy_str, word_size_str, vx_ver):
 
 
 def sym_dict(offset, name_ptr, val_ptr, grp, sym_type, null):
-    return { 
-        'name_addr': name_ptr, 
-        'dest_addr': val_ptr, 
-        'flag': sym_type, 
-        'offset': offset 
+    return {
+        'name_addr': name_ptr,
+        'dest_addr': val_ptr,
+        'flag': sym_type,
+        'offset': offset
     }
 
 
@@ -105,11 +108,11 @@ def parse_sym(offset, sym_st_fmt, sym_size, sym_types):
 
     # return the symbol and whether or not it is valid
     return sym_dict(offset, *fields), is_sym_valid(sym_types, *fields)
-    
+
 
 def get_symtab_bounds(blk, vx_ver, symbol_fn):
     '''
-    Try to get the VxWorks 5 or 6 symbol table.
+    Try to get the VxWorks 5, 6, or 7 symbol table.
     '''
     sym_st_fmt, sym_st_size = get_symbol_fmt(endy_str, word_str, vx_ver)
     sym_types = SYM_TYPES[vx_ver]
@@ -157,7 +160,7 @@ def get_symtab_bounds(blk, vx_ver, symbol_fn):
         if len(symtab) >= SYMTAB_MIN_COUNT:
             break
 
-    
+
     # throw out the candidate symbol table and return if it's below the threshold count
     if len(symtab) < SYMTAB_MIN_COUNT:
         return None
@@ -173,7 +176,7 @@ def get_symtab_bounds(blk, vx_ver, symbol_fn):
 
         if name is not None:
             symbol_fn(sym)
-    
+
     # get the rest of the symbol table and them to the program
     for i in range(i, blk.end.offset - sym_st_size, sym_st_size):
         sym, sym_valid = parse_sym(i, sym_st_fmt, sym_st_size, sym_types)
