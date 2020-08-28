@@ -1,4 +1,4 @@
-import mock
+import collections
 
 
 class getLanguageObj(object):
@@ -9,9 +9,25 @@ class getLanguageObj(object):
         return False
 
 
+class MemoryBlock(object):
+    def __init__(self, start, end):
+        # feel free to add other elements after offset
+        mem = collections.namedtuple('mem', 'offset')
+        self.start = mem(start)
+        self.end = mem(end)
+
+
+class MemoryClass(object):
+    def __init__(self, *args, **kwargs):
+        self.blocks = []
+        for i in range(1):
+            block = MemoryBlock(0, 0x100000)
+            self.blocks.append(block)
+
+
 class currentProgramObj(object):
     def __init__(self, *args, **kwargs):
-        self.memory = mock.MagicMock()
+        self.memory = MemoryClass()
         self.note = "I'm a ghidra currentProgram instance!"
 
     def getDefaultPointerSize(self):
@@ -19,7 +35,9 @@ class currentProgramObj(object):
 
     def getLanguage(self):
         return getLanguageObj()
-        pass
+
+    def getImageBase(self):
+        return 0
     # get_logger = MagicMock()
 
 
