@@ -1,10 +1,9 @@
 import re
-import struct
 import struct as st
 import sys
 
 from common import endy_str, word_str, word_size, read_data_at, maybe_get_string_at, is_offset_in_current_program, \
-    find_bytes_address, print_out, set_base_address, get_is_big_endian
+    find_bytes_address, print_out, set_base_address
 
 # Symbol types for VxWorks 5.5
 VX5_SYM_TYPES = [
@@ -111,20 +110,17 @@ def fix_image_base(blk, vx_ver):
     sym_st_fmt, sym_st_size = get_symbol_fmt(endy_str, word_str, vx_ver)
     sym_types = SYM_TYPES[vx_ver]
 
-    left_off, symtab = find_sym_table(blk, blk.start.offset, sym_st_fmt, sym_st_size, sym_types, vx_ver)
+    _, symtab = find_sym_table(blk, blk.start.offset, sym_st_fmt, sym_st_size, sym_types, vx_ver)
     if len(symtab) < SYMTAB_MIN_COUNT:
         # If no matches were found it could be that they were thrown out because the offset is so large
         # that none of the syms match fall in the memory range of the image.
         # Try again, this time without verifying the addresses.
-        left_off, symtab = find_sym_table(blk, blk.start.offset, sym_st_fmt, sym_st_size, sym_types, vx_ver,
-                                          verify_addresses=False)
+        _, symtab = find_sym_table(blk, blk.start.offset, sym_st_fmt, sym_st_size, sym_types, vx_ver,
+                                   verify_addresses=False)
 
         # throw out the candidate symbol table and return if it's below the threshold count
         if len(symtab) < SYMTAB_MIN_COUNT:
             return None
-
-    #for sym in symtab:
-    #    print_out("name 0x%08x" %sym['name_addr'])
 
     symtab = sorted(symtab, key=lambda x: x['offset'])
 
@@ -245,10 +241,12 @@ def try_rebase(blk, sym_table, vx_ver):
     # 'VxWorks' occurs just before the table of function name strings. this doesn't need to be perfect
     # just need something close to the start of the table will do.
     # Probably need to make this more robust, need to test with a larger set of images.
-    if vx_ver > 5:
-        search_str = '\x00VxWorks\x00'
-    else:
+    if vx_ver == 5:
         search_str = '\x00_GLOBAL_\x00'
+    elif vx_ver == 6:
+        search_str = '\x00VxWorks\x00'
+    else: # vx_ver == 7:
+        search_str = '\x00VxWorks\x00'
 
     search_result = find_bytes_address(blk.start.offset, search_str)
     if search_result:
@@ -256,10 +254,7 @@ def try_rebase(blk, sym_table, vx_ver):
         # since we're searching with a leading null, we need to increment address by 1.
         sym_address = sym_address + 1
 
-        max_ptr = 0
-        for sym in sym_table:
-            if sym['name_addr'] > max_ptr:
-                max_ptr = sym['name_addr']
+        max_ptr = max([sym['name_addr'] for sym in sym_table])
 
         print_out(
             'Base doesn\'t look correct... trying to verify base is correct (name_addr)%08x - (Key_string)%08x' % (
@@ -267,7 +262,7 @@ def try_rebase(blk, sym_table, vx_ver):
         initial_offset = (max_ptr - sym_address) & 0xFFF00000
         print_out('initial_offset: 0x%08x' % initial_offset)
 
-        offset = fuzzy_search_for_function_names(initial_offset, sym_table)
+        offset = fuzzy_search_for_function_names(initial_offset, sym_table, blk.end.offset-blk.start.offset)
 
         if offset:
             print_out('Believe the base address is incorrect... trying to fix it... Fingers crossed')
@@ -281,25 +276,38 @@ def is_valid_function_name(name):
     return re.search(r'^[A-Za-z_0-9-]+$', name)
 
 
-def fuzzy_search_for_function_names(offset, sym_table):
+def fuzzy_search_for_function_names(offset, sym_table, firmware_size):
     """There doesn't seem to be a specific MASK that we can apply that works for all images, so lets try incrementing
     with 0x1000 steps, and determine if there is an offset where all the names resolve correctly.
     """
-    for i in range(0, 0xF0000, 0x1000):
+    if offset > firmware_size:
+        offset = (offset - firmware_size) & 0xFFFFF000
+
+    for i in range(0, firmware_size*2, 0x1000):
         invalid_function_found = False
         curr_offset = offset + i
         print('Testing using offset 0x%08x' % curr_offset)
         for sym in sym_table:
-            name = maybe_get_string_at(sym['name_addr'] - curr_offset)
+            addr = sym['name_addr'] - curr_offset
+            name = maybe_get_string_at(addr)
+
             if name:
+                # since we're using fuzzy logic, need to check that we're not getting a valid string mid-string
+                # so function name need to be preceeded by a null as well.
+                previous_byte = read_data_at(addr-1, 1)
+                if previous_byte[0] != 0:
+                    print("previous_byte name invalid (%x)%s @ 0x%08x" % (previous_byte[0], name, addr))
+                    invalid_function_found = True
+                    break
+
                 if not is_valid_function_name(name):
                     invalid_function_found = True
-                    print("name invalid %s" % name)
+                    print("name invalid %s @ 0x%08x" % (name, addr))
                     break
                 else:
-                    print("VALID: %s" % name)
+                    print(" VALID: %s @ 0x%08x" % (name, addr))
             else:
-                print("invalid (%s) name at %08x" %( name, sym['name_addr'] - curr_offset))
+                #print("invalid (%s) name @ 0x%08x" % (name, addr))
                 invalid_function_found = True
                 break
 

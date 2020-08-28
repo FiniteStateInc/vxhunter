@@ -2,7 +2,7 @@ import sys
 
 sys.path.insert(0, '.')
 
-from vxutility.common import get_memory_blocks, print_err, print_out, get_args, get_image_base, maybe_get_string_at
+from vxutility.common import get_memory_blocks, print_err, print_out, get_args, get_image_base
 from vxutility.symbol import add_symbol, get_symbol, create_symbol_table
 from vxutility.symbol_table import get_symtab_bounds, fix_image_base
 
@@ -35,10 +35,9 @@ def define_symbol_table(vx_ver):
             break
 
     if symtab_bounds is None:
-        #print_err('Could not find symbol table bounds', script_name)
         raise RuntimeError('Could not find symbol table bounds', script_name)
-        # analyzeAll(currentProgram)
-        #return False
+        analyzeAll(currentProgram)
+        return False
 
     symtab_start, symtab_end = symtab_bounds
     print_out('Symbol table found from %08x to %08x' % (symtab_start, symtab_end))
@@ -56,7 +55,7 @@ if __name__ == '__main__':
 
     # Try to get the symbol table/define the symbols.
     try:
-       define_symbol_table(vx_ver)
+        define_symbol_table(vx_ver)
     except (ghidra.util.exception.InvalidInputException, RuntimeError):
         # stuff went wrong!!! we should try see if rebasing will work
         if 0 == get_image_base().offset and 1 == len(get_memory_blocks()):
