@@ -286,7 +286,6 @@ def fuzzy_search_for_function_names(offset, sym_table):
     with 0x1000 steps, and determine if there is an offset where all the names resolve correctly.
     """
     for i in range(0, 0xF0000, 0x1000):
-    #for i in range(0, 0x10000, 0x1000):
         invalid_function_found = False
         curr_offset = offset + i
         print('Testing using offset 0x%08x' % curr_offset)
