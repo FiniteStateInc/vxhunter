@@ -3,9 +3,17 @@ import string
 import struct as st
 import sys
 
-from __main__ import currentProgram, isRunningHeadless, askChoice, getScriptArgs, toAddr
-from ghidra.program.flatapi import FlatProgramAPI
+try:
+    from __main__ import currentProgram, isRunningHeadless, askChoice, getScriptArgs, toAddr
+except ImportError:
+    from tests.mocks.ghidra_main import currentProgram
+    from tests.mocks.ghidra_main import isRunningHeadless
+    from tests.mocks.ghidra_main import askChoice
+    from tests.mocks.ghidra_main import getScriptArgs
+    from tests.mocks.ghidra_main import toAddr
+
 from ghidra.program.model.address import GenericAddress
+from ghidra.program.flatapi import FlatProgramAPI
 from ghidra.program.model.util import CodeUnitInsertionException
 from ghidra.util.task import TaskMonitor
 
