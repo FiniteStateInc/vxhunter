@@ -1,7 +1,7 @@
 import string
 import struct
 import sys
-
+import ghidra
 from ghidra.program.model.util import CodeUnitInsertionException
 from ghidra.program.model.symbol import RefType, SourceType
 from ghidra.program.model.data import ArrayDataType
@@ -44,7 +44,11 @@ def add_symbol(name, name_addr, dest_addr, sym_type):
         fp.createLabel(dest_addr, name, True)
         return
 
-    function.setName(name, SourceType.USER_DEFINED)
+    try:
+        function.setName(name, SourceType.USER_DEFINED)
+    except ghidra.util.exception.DuplicateNameException:
+        # if something already exists here, just continue
+        pass
 
 
 def create_symbol_table(symtab_start, symtab_end, vx_version):

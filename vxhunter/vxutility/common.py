@@ -1,17 +1,13 @@
 import math
-import re
-import time
 import string
 import struct as st
 import sys
 
-from ghidra.program.model.mem import Memory
-from ghidra.program.model.address import GenericAddress
-from ghidra.util.task import TaskMonitor
+from __main__ import currentProgram, isRunningHeadless, askChoice, getScriptArgs, toAddr
 from ghidra.program.flatapi import FlatProgramAPI
+from ghidra.program.model.address import GenericAddress
 from ghidra.program.model.util import CodeUnitInsertionException
-
-from __main__ import currentProgram, isRunningHeadless, askChoice, getScriptArgs
+from ghidra.util.task import TaskMonitor
 
 # Init Ghidra vars
 cp = currentProgram
@@ -27,6 +23,25 @@ is_big_endian = cp.getLanguage().isBigEndian()
 # Init struct formatting vars
 endy_str = ['<', '>'][is_big_endian]
 word_str = ['B', 'H', 'I', 'Q'][int(math.log(word_size, 2))]
+
+
+def get_is_big_endian():
+    return is_big_endian
+
+
+def get_image_base():
+    return cp.getImageBase()
+
+
+def find_bytes_address(start_addr, search_text):
+    return fp.findBytes(cp.getMinAddress(), search_text)
+
+
+def set_base_address(address):
+    ram_blk = cp.memory.blocks[0]
+    print_out('Rebasing to 0x%08x' % address)
+    cp.setImageBase(toAddr(address), True)
+    return mem.moveBlock(ram_blk, toAddr(address), TaskMonitor.DUMMY)
 
 
 def get_args():
@@ -45,7 +60,8 @@ def get_args():
             vx_ver = int(args[1])
     else:
         script_name = sys.argv[0]
-        vx_ver = int(askChoice('Pick a VxWorks Version', '...if you dare!', SUPPORTED_VX_VERSIONS, SUPPORTED_VX_VERSIONS[0]))
+        vx_ver = int(
+            askChoice('Pick a VxWorks Version', '...if you dare!', SUPPORTED_VX_VERSIONS, SUPPORTED_VX_VERSIONS[0]))
 
     # Make sure our VxWorks version is 5, 6, or 7
     if vx_ver not in SUPPORTED_VX_VERSIONS:
@@ -145,14 +161,14 @@ def get_ascii_at(addr, maxlen=1000):
 
     while len(s) < maxlen:
         try:
-            char = chr(fp.getBytes(ptr, 1)[0]) # read one byte at a time
+            char = chr(fp.getBytes(ptr, 1)[0])  # read one byte at a time
         except:
             return None
 
-        if char == '\x00':                 # break if it's a null terminator
+        if char == '\x00':  # break if it's a null terminator
             break
-        
-        if not char in string.printable:   # fail if the character isn't printable
+
+        if not char in string.printable:  # fail if the character isn't printable
             return None
 
         s += char
@@ -166,15 +182,18 @@ def maybe_define_string(addr):
     Try to define a string at `addr`.
     '''
     s = get_ascii_at(addr)
-    
-    if s is None or len(s) == 0: # don't define an empty string
+
+    if s is None or len(s) == 0:  # don't define an empty string
         return None
 
+    s = s.encode('iso-8859-1')
+
     try:
-        if fp.createAsciiString(addr, len(s)) is None: # try to create the string
+        if fp.createAsciiString(addr, len(s)) is None:  # try to create the string
             return None
     except CodeUnitInsertionException:
-        return None
+        # just because we can't create the string doesn't mean we don't want to return the string
+        pass
 
     return s
 
@@ -187,11 +206,11 @@ def maybe_get_string_at(addr):
     data = fp.getDataAt(addr)
 
     if data is None:
-        return maybe_define_string(addr) # if no data is defined, try to define a string
+        return maybe_define_string(addr)  # if no data is defined, try to define a string
     elif data.hasStringValue():
-        return str(data.getValue())      # if a string is defined, return it
+        return str(data.getValue())  # if a string is defined, return it
     else:
-        return None                      # if other data is defined, return None
+        return None  # if other data is defined, return None
 
 
 def get_string_from_addr(addr):
@@ -218,41 +237,50 @@ def auto_analyze():
 Wrappers for manipulating memory regions through the Ghidra API.
 '''
 
+
 def do_memory_op(op, *args):
     try:
         res = op(*args)
-        if res is None: 
+        if res is None:
             return True
 
         return res
     except:
         return False
 
+
 def create_uninitialized_block(name, start, length, overlay=False):
     return do_memory_op(mem.createUninitializedBlock, name, start, length, overlay)
+
 
 def create_initialized_block(name, start, length, fill=0, monitor=TaskMonitor.DUMMY, overlay=False):
     return do_memory_op(mem.createInitializedBlock, name, start, length, fill, monitor, overlay)
 
+
 def move_block(block, addr, monitor=TaskMonitor.DUMMY):
     return do_memory_op(mem.moveBlock, block, addr, monitor)
+
 
 def split_block(block, addr):
     return do_memory_op(mem.split, block, addr)
 
+
 def split_main_memory(addr):
     return split_block(mem.blocks[0], addr)
+
 
 def join_blocks(b1, b2):
     return do_memory_op(mem.join, b1, b2)
 
+
 def remove_block(b):
     do_memory_op(mem.removeBlock, b, TaskMonitor.DUMMY)
+
 
 def get_memory_blocks():
     return mem.blocks
 
+
 def get_main_memory():
     if len(mem.blocks) == 0: return None
     return mem.blocks[0]
-
