@@ -85,7 +85,12 @@ def set_numeric_variable_value(val, loc, emu):
 
     elif loc.isStackStorage():
         stack_off = loc.stackOffset
-        emu.writeStackValue(stack_off, loc.size(), val)
+        # This fails sometimes with an out of bounds exceptions due to ghidra 9.2 (?)
+        # Edwin did a lazy so he could get back to other stuff, someone smarter should fix this soon
+        try:
+            emu.writeStackValue(stack_off, loc.size(), val)
+        except:
+            pass
 
     elif loc.isMemoryStorage():
         addr = loc.minAddress
@@ -187,7 +192,7 @@ def emulate_func(func, params, skip_calls=False, funcs_to_call=[]):
     """
     skip_calls and funcs_to_call are hacks to work around disassembly errors.
 
-    At least in the cases implemented thusfar, we don't really care about the behavior of functions called 
+    At least in the cases implemented thusfar, we don't really care about the behavior of functions called
     from an emulated function, we're just trying to pull out some memory or register values.
 
     If we therefore skip over any calls (that we don't care about), then our chances of encountering
