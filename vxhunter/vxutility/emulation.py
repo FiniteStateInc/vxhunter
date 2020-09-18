@@ -74,7 +74,9 @@ def emu_malloc(n):
     return fp.toAddr(old_free_head)
 
 def write_arr(arr, addr, emu):
-    for val in addr:
+    for val in arr:
+        if isinstance(val, (str, unicode)):
+            val = ord(val)
         emu.writeMemoryValue(addr, 1, val)
         addr = addr.add(1)
 
@@ -82,20 +84,15 @@ def set_numeric_variable_value(val, loc, emu):
     if loc.isRegisterStorage():
         reg = loc.register
         emu.writeRegister(reg, val)
-
     elif loc.isStackStorage():
         stack_off = loc.stackOffset
-        # This fails sometimes with an out of bounds exceptions due to ghidra 9.2 (?)
-        # Edwin did a lazy so he could get back to other stuff, someone smarter should fix this soon
-        try:
-            emu.writeStackValue(stack_off, loc.size(), val)
-        except:
-            pass
-
+        # ghidra bug :/
+        #emu.writeStackValue(stack_off, loc.size(), val)
+        sp_addr = fp.toAddr(read_sp(emu) + stack_off)
+        write_arr(pack(val, size=loc.size()), sp_addr, emu)
     elif loc.isMemoryStorage():
         addr = loc.minAddress
         emu.writeMemoryValue(addr, loc.size(), val)
-
     else:
         raise NotImplementedError('Cannot set variable value for location: %s' % loc)
 
