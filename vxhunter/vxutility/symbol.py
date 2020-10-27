@@ -36,6 +36,8 @@ def add_symbol(name, name_addr, dest_addr, sym_type):
         fp.createLabel(dest_addr, name, True)
         return
 
+    # Strip "_" from the beginning of functions
+    name = name.lstrip("_")
     fp.disassemble(dest_addr)
     function = fp.createFunction(dest_addr, name)
 
